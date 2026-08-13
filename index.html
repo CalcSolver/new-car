@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="referrer" content="no-referrer-when-downgrade">
-    <title>Online Racing Game - Nitro & 5-Lap Edition</title>
+    <title>Online Racing Game - Nitro Edition</title>
 
     <!-- Favicons -->
     <link rel="apple-touch-icon" sizes="180x180" href="favicons/apple-touch-icon.png">
@@ -21,6 +21,52 @@
     <!-- Stylesheets -->
     <link href="style.css" rel="stylesheet">
 
+    <!-- Custom Clean HUD Styling -->
+    <style>
+        #game-hud {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(15, 15, 25, 0.85);
+            border: 2px solid #ffaa00;
+            border-radius: 10px;
+            padding: 15px 20px;
+            color: #ffffff;
+            font-family: 'Press Start 2P', monospace;
+            font-size: 11px;
+            line-height: 1.8;
+            z-index: 9999;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            pointer-events: none;
+            display: none; /* Hidden on menu, shown in game */
+        }
+
+        .hud-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 15px;
+        }
+
+        .shop-btn {
+            font-family: 'Press Start 2P', monospace;
+            font-size: 10px;
+            padding: 12px 18px;
+            background: linear-gradient(180deg, #ff9900, #cc6600);
+            color: #ffffff;
+            border: 2px solid #fff;
+            border-radius: 6px;
+            cursor: pointer;
+            box-shadow: 0 4px 0 #883300;
+            transition: transform 0.1s;
+        }
+
+        .shop-btn:active {
+            transform: translateY(2px);
+            box-shadow: 0 2px 0 #883300;
+        }
+    </style>
+
     <!-- Modern Three.js & Firebase Compat SDKs -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
@@ -29,11 +75,12 @@
 </head>
 <body>
 
-    <!-- On-Screen HUD Overlay -->
-    <div id="game-hud" style="position: absolute; top: 15px; left: 15px; color: #ffffff; font-family: 'Press Start 2P', monospace; font-size: 13px; z-index: 1000; text-shadow: 2px 2px #000000; pointer-events: none;">
-        <div>🪙 COINS: <span id="hud-coins">0</span></div>
-        <div style="margin-top: 8px;">🔥 NITRO: <span id="hud-nitro">3</span> (PRESS SPACE)</div>
-        <div style="margin-top: 8px;">🏁 LAP: <span id="hud-lap">1</span> / 5</div>
+    <!-- Styled Arcade HUD (Top-Right) -->
+    <div id="game-hud">
+        <div class="hud-item">🪙 COINS: <span id="hud-coins" style="color: #ffcc00;">0</span></div>
+        <div class="hud-item">🔥 NITRO: <span id="hud-nitro" style="color: #ff4400;">3</span></div>
+        <div class="hud-item">🏁 LAP: <span id="hud-lap" style="color: #00ffcc;">1</span> / 5</div>
+        <div style="font-size: 8px; color: #aaa; margin-top: 5px; text-align: center;">[SPACE] = BOOST</div>
     </div>
 
     <!-- Hidden Track Data -->
@@ -43,7 +90,7 @@
 
     <!-- Main Front-End Menu Overlay -->
     <div id="fore">
-        <div id="version">v1.3.0 Nitro Edition</div>
+        <div id="version">v1.3.0</div>
         <div class="title" id="title">Online Racing Game!</div>
         
         <div class="menuitem title">Pick a name:<br/><input id="name" class="title" placeholder="Name" autocomplete="off"></input></div>
@@ -58,9 +105,9 @@
             </div>
         </div>
 
-        <!-- Nitro Shop Button in Menu -->
-        <div class="menuitem title" style="margin-top: 10px;">
-            <button onclick="buyNitro()" style="font-family: 'Press Start 2P', monospace; padding: 10px 15px; background-color: #ff8800; color: #ffffff; border: 2px solid #ffffff; border-radius: 6px; cursor: pointer;">
+        <!-- Clean Nitro Shop Button -->
+        <div class="menuitem title" style="margin-top: 15px;">
+            <button class="shop-btn" onclick="buyNitro()">
                 🛒 Buy 1 Nitro (50 Coins)
             </button>
         </div>
