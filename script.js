@@ -1,382 +1,237 @@
-var walls = [];
-var start = [];
-var trees = [];
-var arrows = [];
-var erase = [];
-var hist = [];
+// ==========================================
+// 1. FIREBASE CONFIGURATION (Your Database)
+// ==========================================
+var firebaseConfig = {
+  apiKey: "AIzaSyBhBjB9cD8IDFarhBMUoG_jhL_Gl277ZG8",
+  authDomain: "racing-game-67477.firebaseapp.com",
+  databaseURL: "https://racing-game-67477-default-rtdb.firebaseio.com",
+  projectId: "racing-game-67477",
+  storageBucket: "racing-game-67477.firebasestorage.app",
+  messagingSenderId: "48596697348",
+  appId: "1:48596697348:web:897b9f78e511bc2f635051",
+  measurementId: "G-R80VNMYKWR"
+};
 
-var mouse = {
-	down: false,
-	start: {
-		x: 0,
-		y: 0
-	},
-	cur: {
-		x: 0,
-		y: 0
-	},
-	end: {
-		x: 0,
-		y: 0
-	}
-}
-var sel = 0;
-var s = document.getElementById("menu");
-var ca = document.getElementById("c");
-var height = ca.clientHeight * window.devicePixelRatio;
-var width = ca.clientWidth * window.devicePixelRatio;
-ca.height = height;
-ca.width = width;
-var scale = 10;
-var offset = {x: width % scale / 2, y : height % scale / 2}
-var c = ca.getContext("2d");
-c.lineCap = "round";
-c.lineWidth = 2;
-function drawBG(){
-	c.clearRect(0, 0, width, height);
-	c.strokeStyle="#C0C0C0";
-	c.beginPath();
-	for(var x = offset.x - scale; x < width; x += scale){
-		c.moveTo(x, 0);
-		c.lineTo(x, height);
-	}
-	for(var y = offset.y - scale; y < height; y += scale){
-		c.moveTo(0, y);
-		c.lineTo(width, y);
-	}
-	c.stroke();
-}
-drawBG();
-
-function update(){
-	requestAnimationFrame(update);
-	height = ca.clientHeight * window.devicePixelRatio;
-	width = ca.clientWidth * window.devicePixelRatio;
-	ca.height = height;
-	ca.width = width;
-	drawBG();
-	c.fillStyle="#08cc3c";
-	c.beginPath();
-	c.moveTo(width / 2, height / 2 - 10 - scale / 2);
-	c.lineTo(width / 2 - 5, height / 2 + 5 - scale / 2);
-	c.lineTo(width / 2 + 5, height / 2 + 5 - scale / 2);
-	c.fill();
-	c.translate(offset.x, offset.y);
-	c.lineCap = "round";
-	c.lineWidth = 2;
-	c.strokeStyle="#f48342";
-	c.beginPath();
-	for(var i = 0; i < walls.length; i++){
-		c.moveTo(scale * walls[i].start.x, scale * walls[i].start.y);
-		c.lineTo(scale * walls[i].end.x, scale * walls[i].end.y);
-	}
-	c.stroke();
-	c.strokeStyle="#428ff4";
-	c.beginPath();
-	for(var i = 0; i < start.length && i < 1; i++){
-		c.moveTo(scale * start[i].start.x, scale * start[i].start.y);
-		c.lineTo(scale * start[i].end.x, scale * start[i].end.y);
-	}
-	c.stroke();
-	c.strokeStyle="#f00";
-	c.beginPath();
-	for(var i = 1; i < start.length; i++){
-		c.moveTo(scale * start[i].start.x, scale * start[i].start.y);
-		c.lineTo(scale * start[i].end.x, scale * start[i].end.y);
-	}
-	c.stroke();
-	c.fillStyle="#08cc3c";
-	for(var i = 0; i < trees.length; i++){
-		c.beginPath();
-		c.arc(scale * trees[i].x, scale * trees[i].y, 5, 0, 2 * Math.PI);
-		c.fill();
-	}
-	c.fillStyle="#f00";
-	c.beginPath();
-	for(var i = 0; i < arrows.length; i++){
-		c.moveTo(scale * arrows[i].x, scale * arrows[i].y);
-		c.lineTo(scale * arrows[i].x - scale * Math.cos(arrows[i].angle) / 2, scale * arrows[i].y - scale * Math.sin(arrows[i].angle) / 2);
-	}
-	c.stroke();
-	c.translate(-offset.x, -offset.y);
-}
-update();
-
-function select(n){
-	sel = n;
-	for(var i = 0; i < s.children.length - 1; i++)
-		s.children[i].className = "button" + (i == n ? " selected" : "");
+// Initialize Firebase compatibility SDK
+if (typeof firebase !== 'undefined' && !firebase.apps.length) {
+  firebase.initializeApp(firebaseConfig);
 }
 
-function gridX(x){
-	return Math.round((x * window.devicePixelRatio - offset.x) / scale);
+// Global Variables & Game Settings
+var database = typeof firebase !== 'undefined' ? firebase.database() : null;
+var scene, camera, renderer;
+var player = {
+    x: 0,
+    y: 0,
+    z: 0,
+    rot: 0,
+    speed: 0,
+    lap: 1,
+    maxLaps: 5, // UPGRADED: Set to 5 Laps
+    color: 0
+};
+
+// UPGRADED: Physics parameters for faster car performance
+var MAX_SPEED = 1.0;     // Increased top speed (Original was ~0.5)
+var ACCELERATION = 0.025; // Punchier takeoff speed
+var FRICTION = 0.98;     // Momentum decay rate
+var TURN_SPEED = 0.045;  // Sharper handling
+
+var opponents = {};
+var keys = {};
+
+// ==========================================
+// 2. MENU & UI LOGIC
+// ==========================================
+var color = 0;
+
+function updateColor() {
+    var slider = document.getElementById("slider");
+    if (slider) {
+        slider.style.backgroundColor = "hsl(" + color + ", 100%, 50%)";
+    }
 }
 
-function gridY(x){
-	return Math.round((x * window.devicePixelRatio - offset.y) / scale);
+function menu2() {
+    var nameInput = document.getElementById("name");
+    var playerName = nameInput ? nameInput.value.trim() : "";
+    if (!playerName) playerName = "Player" + Math.floor(Math.random() * 1000);
+    
+    player.name = playerName;
+    player.color = color;
+
+    // Hide Menu Overlay
+    var fore = document.getElementById("fore");
+    if (fore) fore.style.display = "none";
+
+    // Initialize 3D Engine & Multiplayer
+    initEngine();
+    initMultiplayer();
 }
 
-ca.onmousedown = function(e){
-	mouse.down = true;
-	mouse.cur.x = e.clientX;
-	mouse.cur.y = e.clientY;
-	mouse.start.x = e.clientX;
-	mouse.start.y = e.clientY;
-	if(sel == 0)
-		walls.push({
-			start: {
-				x: gridX(mouse.start.x),
-				y: gridY(mouse.start.y)
-			},
-			end: {
-				x: gridX(mouse.start.x),
-				y: gridY(mouse.start.y)
-			}
-		});
-	if(sel == 1)
-		start.push({
-			start: {
-				x: gridX(mouse.start.x),
-				y: gridY(mouse.start.y)
-			},
-			end: {
-				x: gridX(mouse.start.x),
-				y: gridY(mouse.start.y)
-			}
-		});
-	if(sel == 2)
-		trees.push({
-			x: gridX(mouse.start.x),
-			y: gridY(mouse.start.y)
-		});
-	if(sel == 3)
-		arrows.push({
-			x: gridX(mouse.start.x),
-			y: gridY(mouse.start.y),
-			angle: 0
-		});
-	if(sel == 4)
-		eraseL(gridX(mouse.cur.x), gridY(mouse.cur.y));
+// Frame-busting / prevent embedding in unauthorized external sites
+if (window.top !== window.self) {
+    try {
+        window.top.location.href = window.self.location.href;
+    } catch(e) {}
 }
 
-ca.onmousemove = function(e){
-	mouse.cur.x = e.clientX;
-	mouse.cur.y = e.clientY;
-	if(sel == 0 && mouse.down){
-		walls[walls.length - 1].end.x = gridX(mouse.cur.x);
-		walls[walls.length - 1].end.y = gridY(mouse.cur.y);
-	}
-	if(sel == 1 && mouse.down){
-		start[start.length - 1].end.x = gridX(mouse.cur.x);
-		start[start.length - 1].end.y = gridY(mouse.cur.y);
-	}
-	if(sel == 2 && mouse.down){
-		trees.push({
-			x: gridX(mouse.cur.x),
-			y: gridY(mouse.cur.y)
-		});
-		hist.push(sel);
-	}
-	if(sel == 3 && mouse.down)
-		arrows[arrows.length - 1].angle = Math.atan2(mouse.start.y - mouse.cur.y, mouse.start.x - mouse.cur.x);
-	if(sel == 4 && mouse.down)
-		eraseL(gridX(mouse.cur.x), gridY(mouse.cur.y));
+// ==========================================
+// 3. THREE.JS 3D SCENE SETUP
+// ==========================================
+function initEngine() {
+    scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x87ceeb); // Sky blue background
+
+    camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
+
+    // Basic Ambient and Directional Lighting
+    var ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+    scene.add(ambientLight);
+
+    var dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    dirLight.position.set(100, 200, 100);
+    scene.add(dirLight);
+
+    // Track Ground Plane
+    var groundGeo = new THREE.PlaneGeometry(500, 500);
+    var groundMat = new THREE.MeshLambertMaterial({ color: 0x228b22 });
+    var ground = new THREE.Mesh(groundGeo, groundMat);
+    ground.rotation.x = -Math.PI / 2;
+    scene.add(ground);
+
+    // Create Local Player Car Mesh
+    createCarMesh(player);
+
+    // Controls listeners
+    window.addEventListener('keydown', function(e) { keys[e.key] = true; });
+    window.addEventListener('keyup', function(e) { keys[e.key] = false; });
+    window.addEventListener('resize', onWindowResize);
+
+    // Start Game Loop
+    animate();
 }
 
-ca.onmouseup = function(e){
-	mouse.down = false;
-	mouse.cur.x = e.clientX;
-	mouse.cur.y = e.clientY;
-	mouse.end.x = e.clientX;
-	mouse.end.y = e.clientY;
-	if(sel == 0){
-		walls[walls.length - 1].end.x = gridX(mouse.end.x);
-		walls[walls.length - 1].end.y = gridY(mouse.end.y);
-	}
-	if(sel == 1){
-		start[start.length - 1].end.x = gridX(mouse.end.x);
-		start[start.length - 1].end.y = gridY(mouse.end.y);
-	}
-	if(sel == 2)
-		trees[trees.length - 1] = {
-			x: gridX(mouse.end.x),
-			
-			y: gridY(mouse.end.y)
-		};
-	hist.push(sel);
-	//console.log(hist);
+function createCarMesh(pObj) {
+    var carGroup = new THREE.Group();
+    var bodyGeo = new THREE.BoxGeometry(1.5, 0.6, 2.8);
+    var bodyMat = new THREE.MeshLambertMaterial({ color: new THREE.Color("hsl(" + (pObj.color || 0) + ", 100%, 50%)") });
+    var body = new THREE.Mesh(bodyGeo, bodyMat);
+    body.position.y = 0.3;
+    carGroup.add(body);
+
+    scene.add(carGroup);
+    pObj.mesh = carGroup;
 }
 
-function imp(){
-	var text = prompt("Track data?").trim().split("|");
-	
-	if(!text || text.length < 4)
-		return;
+// ==========================================
+// 4. GAMEPLAY LOOP & CAR PHYSICS
+// ==========================================
+function animate() {
+    requestAnimationFrame(animate);
 
-	var wallsText = text[0].split(" ");
-	var startText = text[1].split(" ");
-	var treesText = text[2].split(" ");
-	var arrowsText = text[3].split(" ");
+    // Drive Input Mechanics
+    if (keys['ArrowUp'] || keys['w'] || keys['W']) {
+        player.speed = Math.min(player.speed + ACCELERATION, MAX_SPEED);
+    } else if (keys['ArrowDown'] || keys['s'] || keys['S']) {
+        player.speed = Math.max(player.speed - ACCELERATION, -MAX_SPEED * 0.4);
+    } else {
+        player.speed *= FRICTION;
+    }
 
-	walls = [];
-	for(var i = 0; i < wallsText.length; i++){
-		var t = wallsText[i].split("/");
-		if(t.length < 2)
-			continue;
+    if (keys['ArrowLeft'] || keys['a'] || keys['A']) {
+        player.rot += TURN_SPEED * (player.speed >= 0 ? 1 : -1);
+    }
+    if (keys['ArrowRight'] || keys['d'] || keys['D']) {
+        player.rot -= TURN_SPEED * (player.speed >= 0 ? 1 : -1);
+    }
 
-		walls.push({
-			start: {
-				x: parseInt(t[0].split(",")[0]) + Math.floor(width / scale / 2),
-				y: -parseInt(t[0].split(",")[1]) + Math.floor(height / scale / 2)
-			},
-			end: {
-				x: parseInt(t[1].split(",")[0]) + Math.floor(width / scale / 2),
-				y: -parseInt(t[1].split(",")[1]) + Math.floor(height / scale / 2)
-			}
-		});
-	}
+    // Position updates
+    player.x += Math.sin(player.rot) * player.speed;
+    player.z += Math.cos(player.rot) * player.speed;
 
-	start = [];
-	for(var i = 0; i < startText.length; i++){
-		var t = startText[i].split("/");
-		if(t.length < 2)
-			continue;
+    if (player.mesh) {
+        player.mesh.position.set(player.x, 0, player.z);
+        player.mesh.rotation.y = player.rot;
+    }
 
-		start.push({
-			start: {
-				x: parseInt(t[0].split(",")[0]) + Math.floor(width / scale / 2),
-				y: -parseInt(t[0].split(",")[1]) + Math.floor(height / scale / 2)
-			},
-			end: {
-				x: parseInt(t[1].split(",")[0]) + Math.floor(width / scale / 2),
-				y: -parseInt(t[1].split(",")[1]) + Math.floor(height / scale / 2)
-			}
-		});
-	}
+    // Follow-Camera Logic
+    camera.position.x = player.x - Math.sin(player.rot) * 8;
+    camera.position.z = player.z - Math.cos(player.rot) * 8;
+    camera.position.y = player.y + 4;
+    camera.lookAt(player.x, player.y + 1, player.z);
 
-	trees = [];
-	for(var i = 0; i < treesText.length; i++){
-		if(treesText[i].trim().length == 0)
-			continue;
+    // Broadcast Position to Firebase
+    syncPositionToFirebase();
 
-		trees.push({
-			x: parseInt(treesText[i].split(",")[0]) + Math.floor(width / scale / 2),
-			y: -parseInt(treesText[i].split(",")[1]) + Math.floor(height / scale / 2)
-		});
-	}
-
-	arrows = [];
-	for(var i = 0; i < arrowsText.length; i++){
-		var t = arrowsText[i].split("/");
-		if(t.length < 2)
-			continue;
-
-		arrows.push({
-			x: parseInt(t[0].split(",")[0]) + Math.floor(width / scale / 2),
-			y: -parseInt(t[0].split(",")[2]) + Math.floor(height / scale / 2),
-			angle: (90 - parseInt(t[1])) * Math.PI / 180
-		});
-	}
+    renderer.render(scene, camera);
 }
 
-function exp(){
-	var text = "";
-	for(var i = 0; i < walls.length; i++){
-		text += walls[i].start.x - Math.floor(width / scale / 2) + ",";
-		text += -1 * (walls[i].start.y - Math.floor(height / scale / 2)) + "/";
-		text += walls[i].end.x - Math.floor(width / scale / 2) + ",";
-		text += -1 * (walls[i].end.y - Math.floor(height / scale / 2)) + " ";
-	}
-	text += "|";
-	for(var i = 0; i < start.length; i++){
-		text += start[i].start.x - Math.floor(width / scale / 2) + ",";
-		text += -1 * (start[i].start.y - Math.floor(height / scale / 2)) + "/";
-		text += start[i].end.x - Math.floor(width / scale / 2) + ",";
-		text += -1 * (start[i].end.y - Math.floor(height / scale / 2)) + " ";
-	}
-	text += "|";
-	for(var i = 0; i < trees.length; i++){
-		text += trees[i].x - Math.floor(width / scale / 2) + ",";
-		text += -1 * (trees[i].y - Math.floor(height / scale / 2)) + " ";
-	}
-	text += "|";
-	for(var i = 0; i < arrows.length; i++){
-		text += arrows[i].x - Math.floor(width / scale / 2) + ",3,";
-		text += -1 * (arrows[i].y - Math.floor(height / scale / 2)) + "/";
-		text += Math.floor(90 - arrows[i].angle * 180 / Math.PI) + " ";
-	}
-	text += "|";
-	text += "<br/>";
-	var win = window.open();
-	win.document.body.innerHTML = text;
+function onWindowResize() {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
 }
 
-document.body.onkeydown = function(e){
-	if(e.keyCode == 90 && (e.ctrlKey || e.metaKey)){
-		//console.log(hist);
-		e.preventDefault();
-		var a = hist.splice(hist.length - 1, 1)[0];
-		var ar = [walls, start, trees, arrows, erase][a];
-		var del = ar.splice(ar.length - 1, 1)[0];
-		if(ar == erase){
-			del.list.splice(del.pos, 0, del.ob);
-		}
-	}
-}
-function eraseL(x, y){
-	for(var i = 0; i < walls.length; i++)
-		if(Math.hypot(walls[i].start.x - x, walls[i].start.y - y) < 1 || Math.hypot(walls[i].end.x - x, walls[i].end.y - y) < 1){
-			hist.push(sel);
-			erase.push({
-				list: walls,
-				ob: walls.splice(i, 1)[0],
-				pos: i
-			});
-		}
-	for(var i = 0; i < start.length; i++)
-		if(Math.hypot(start[i].start.x - x, start[i].start.y - y) < 1 || Math.hypot(start[i].end.x - x, start[i].end.y - y) < 1){
-			hist.push(sel);
-			erase.push({
-				list: start,
-				ob: start.splice(i, 1)[0],
-				pos: i
-			});
-		}
-	for(var i = 0; i < trees.length; i++)
-		if(Math.hypot(trees[i].x - x, trees[i].y - y) < 1){
-			hist.push(sel);
-			erase.push({
-				list: trees,
-				ob: trees.splice(i, 1)[0],
-				pos: i
-			});
-		}
-	for(var i = 0; i < arrows.length; i++)
-		if(Math.hypot(arrows[i].x - x, arrows[i].y - y) < 1){
-			hist.push(sel);
-			erase.push({
-				list: arrows,
-				ob: arrows.splice(i, 1)[0],
-				pos: i
-			});
-		}
-}
-function help(){
-	document.getElementById("help").parentElement.style.transform = "none";
+// ==========================================
+// 5. FIREBASE MULTIPLAYER SYNC
+// ==========================================
+var playerRef = null;
+
+function initMultiplayer() {
+    if (!database) return;
+
+    var playersRef = database.ref('players');
+    playerRef = playersRef.push();
+
+    // Remove player on disconnect
+    playerRef.onDisconnect().remove();
+
+    // Listen for other players joining/moving
+    playersRef.on('child_added', function(snapshot) {
+        var id = snapshot.key;
+        if (id !== playerRef.key) {
+            var data = snapshot.val();
+            opponents[id] = data;
+            createCarMesh(opponents[id]);
+        }
+    });
+
+    playersRef.on('child_changed', function(snapshot) {
+        var id = snapshot.key;
+        if (id !== playerRef.key && opponents[id]) {
+            var data = snapshot.val();
+            opponents[id].x = data.x;
+            opponents[id].z = data.z;
+            opponents[id].rot = data.rot;
+            if (opponents[id].mesh) {
+                opponents[id].mesh.position.set(data.x, 0, data.z);
+                opponents[id].mesh.rotation.y = data.rot;
+            }
+        }
+    });
+
+    playersRef.on('child_removed', function(snapshot) {
+        var id = snapshot.key;
+        if (opponents[id]) {
+            if (opponents[id].mesh) scene.remove(opponents[id].mesh);
+            delete opponents[id];
+        }
+    });
 }
 
-function dedupTrees(){
-	var poss = [];
-
-	for(var i = 0; i < trees.length; i++){
-		for(var n = 0; n < poss.length; n++){
-			if(poss[n].x == trees[i].x && poss[n].y == trees[i].y){
-				console.log(i);
-				trees.splice(i--, 1);
-				break;
-			}
-		}
-		
-		poss.push(trees[i]);
-	}
+function syncPositionToFirebase() {
+    if (playerRef) {
+        playerRef.set({
+            name: player.name,
+            x: player.x,
+            z: player.z,
+            rot: player.rot,
+            color: player.color,
+            lap: player.lap
+        });
+    }
 }
