@@ -1,7 +1,7 @@
 // ==========================================
-// 1. CONFIG & PRESETS
+// 1. GLOBAL CONFIG & TRACK DATA
 // ==========================================
-const TRACK_WIDTH = 18; // Much wider lane allowance
+const TRACK_WIDTH = 16;
 
 const PRESET_TRACKS = {
     oval: [
@@ -21,52 +21,48 @@ const PRESET_TRACKS = {
 };
 
 let customTrackNodes = JSON.parse(localStorage.getItem("customTrackNodes")) || [
-    {x: -60, z: -60}, {x: 60, z: -60}, {x: 60, z: 60}, {x: -60, z: 60}
+    {x: -50, z: -50}, {x: 50, z: -50}, {x: 50, z: 50}, {x: -50, z: 50}
 ];
 
 let currentTrackPoints = [];
 let currentCurve = null;
 
-// Customization Config
 let carModel = 'sport';
 let carColorHex = 0xff0055;
 
-function setCarModel(model, btn) {
+// Global Scope UI Navigation Methods
+window.showMainMenu = function() { hideAllScreens(); document.getElementById("main-menu").classList.remove("hidden"); };
+window.showGarage = function() { hideAllScreens(); document.getElementById("garage-menu").classList.remove("hidden"); };
+window.showHostGrid = function() { hideAllScreens(); document.getElementById("host-modal").classList.remove("hidden"); };
+window.showJoinMenu = function() { hideAllScreens(); document.getElementById("join-menu").classList.remove("hidden"); };
+
+function hideAllScreens() {
+    ['main-menu', 'garage-menu', 'host-modal', 'join-menu', 'game-hud', 'editor-ui'].forEach(id => {
+        let el = document.getElementById(id);
+        if (el) el.classList.add("hidden");
+    });
+}
+
+window.setCarModel = function(model, btn) {
     carModel = model;
     document.querySelectorAll('.opt-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-}
+    if (btn) btn.classList.add('active');
+};
 
-function setCarColor(color, swatch) {
+window.setCarColor = function(color, swatch) {
     carColorHex = color;
     document.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('active'));
-    swatch.classList.add('active');
-}
-
-// UI Navigation
-function hideAllScreens() {
-    document.getElementById("main-menu").classList.add("hidden");
-    document.getElementById("garage-menu").classList.add("hidden");
-    document.getElementById("host-modal").classList.add("hidden");
-    document.getElementById("join-menu").classList.add("hidden");
-    document.getElementById("game-hud").classList.add("hidden");
-    document.getElementById("editor-ui").classList.add("hidden");
-}
-
-function showMainMenu() { hideAllScreens(); document.getElementById("main-menu").classList.remove("hidden"); }
-function showGarage() { hideAllScreens(); document.getElementById("garage-menu").classList.remove("hidden"); }
-function showHostGrid() { hideAllScreens(); document.getElementById("host-modal").classList.remove("hidden"); }
-function showJoinMenu() { hideAllScreens(); document.getElementById("join-menu").classList.remove("hidden"); }
+    if (swatch) swatch.classList.add('active');
+};
 
 // ==========================================
-// 2. ENGINE & CAR BUILDER
+// 2. ENGINE & SCENE INITIALIZATION
 // ==========================================
 let scene, camera, renderer, car;
 let boosters = [], jumps = [];
 let trackMesh = null;
 let editorMarkers = [];
 
-// Tuned Physics (Slower & Smoother Steering)
 let speed = 0, rot = 0, verticalSpeed = 0, carY = 0;
 let isGrounded = true;
 let keys = {};
@@ -89,7 +85,7 @@ function initEngine() {
     sun.position.set(100, 200, 100);
     scene.add(sun);
 
-    // Ground & Mountains
+    // Ground Plane
     let ground = new THREE.Mesh(
         new THREE.PlaneGeometry(800, 800),
         new THREE.MeshLambertMaterial({ color: 0x3b7a57 })
@@ -97,22 +93,23 @@ function initEngine() {
     ground.rotation.x = -Math.PI / 2;
     scene.add(ground);
 
-    createMountains();
+    createBackgroundMountains();
 
     window.addEventListener('keydown', e => keys[e.key] = true);
     window.addEventListener('keyup', e => keys[e.key] = false);
+    window.addEventListener('resize', onResize);
 
     animate();
 }
 
-function createMountains() {
+function createBackgroundMountains() {
     let mtnGeo = new THREE.ConeGeometry(35, 70, 5);
     let mtnMat = new THREE.MeshLambertMaterial({ color: 0x556677 });
 
-    for (let i = 0; i < 18; i++) {
+    for (let i = 0; i < 16; i++) {
         let mtn = new THREE.Mesh(mtnGeo, mtnMat);
-        let angle = (i / 18) * Math.PI * 2;
-        mtn.position.set(Math.cos(angle) * 320, 30, Math.sin(angle) * 320);
+        let angle = (i / 16) * Math.PI * 2;
+        mtn.position.set(Math.cos(angle) * 320, 35, Math.sin(angle) * 320);
         scene.add(mtn);
     }
 }
@@ -147,7 +144,7 @@ function buildCustomCar() {
 }
 
 // ==========================================
-// 3. TRACK & ENVIRONMENT
+// 3. TRACK & OBJECT BUILDER
 // ==========================================
 function clearObjects() {
     if (trackMesh) scene.remove(trackMesh);
@@ -160,6 +157,8 @@ function clearObjects() {
 function buildTrack(points) {
     clearObjects();
 
+    if (!points || points.length < 3) return;
+
     let vectors = points.map(p => new THREE.Vector3(p.x, 0.1, p.z));
     currentCurve = new THREE.CatmullRomCurve3(vectors, true);
 
@@ -169,7 +168,7 @@ function buildTrack(points) {
     trackMesh.scale.y = 0.01;
     scene.add(trackMesh);
 
-    // Boost & Ramp Placement
+    // Boost & Jump Pads
     for (let i = 0; i < points.length; i++) {
         let p = points[i];
         if (i % 2 === 0) createBoosterPad(p.x, p.z);
@@ -193,12 +192,14 @@ function createRampJump(x, z) {
 }
 
 // ==========================================
-// 4. GAME ENGINE CONTROLS
+// 4. GAME CONTROLLER HANDLERS
 // ==========================================
-function startRace(trackKey) {
+window.startRace = function(trackKey) {
     initEngine();
     hideAllScreens();
-    document.getElementById("game-hud").classList.remove("hidden");
+    
+    let hud = document.getElementById("game-hud");
+    if (hud) hud.classList.remove("hidden");
     isEditorMode = false;
 
     currentTrackPoints = (trackKey === 'custom') ? customTrackNodes : PRESET_TRACKS[trackKey] || PRESET_TRACKS.oval;
@@ -207,17 +208,19 @@ function startRace(trackKey) {
 
     car.position.set(currentTrackPoints[0].x, 0, currentTrackPoints[0].z);
     speed = 0; rot = 0; carY = 0;
-}
+};
 
-function launchTrackEditor() {
+window.launchTrackEditor = function() {
     initEngine();
     hideAllScreens();
-    document.getElementById("editor-ui").classList.remove("hidden");
+
+    let editorUI = document.getElementById("editor-ui");
+    if (editorUI) editorUI.classList.remove("hidden");
     isEditorMode = true;
 
     currentTrackPoints = [...customTrackNodes];
     updateEditor();
-}
+};
 
 function updateEditor() {
     editorMarkers.forEach(m => scene.remove(m));
@@ -234,82 +237,80 @@ function updateEditor() {
     buildCustomCar();
 }
 
-function addTrackNode() {
+window.addTrackNode = function() {
     let nx = car.position.x + Math.sin(rot) * 15;
     let nz = car.position.z + Math.cos(rot) * 15;
     currentTrackPoints.push({ x: nx, z: nz });
     updateEditor();
-}
+};
 
-function clearTrackNodes() {
+window.clearTrackNodes = function() {
     currentTrackPoints = [{x:-50,z:-50},{x:50,z:-50},{x:50,z:50},{x:-50,z:50}];
     updateEditor();
-}
+};
 
-function saveCustomTrack() {
+window.saveCustomTrack = function() {
     customTrackNodes = [...currentTrackPoints];
     localStorage.setItem("customTrackNodes", JSON.stringify(customTrackNodes));
     alert("Custom Track Saved!");
-}
+};
 
-function exitEditor() {
+window.exitEditor = function() {
     editorMarkers.forEach(m => scene.remove(m));
     showMainMenu();
-}
+};
 
 // ==========================================
-// 5. ANIMATION & EASY HANDLING PHYSICS
+// 5. GAME LOOP & PHYSICS
 // ==========================================
 function animate() {
     requestAnimationFrame(animate);
 
-    // Gentler Throttle & Brakes
+    if (!car) {
+        if (renderer && scene && camera) renderer.render(scene, camera);
+        return;
+    }
+
+    // Driving Physics
     if (keys['w'] || keys['W'] || keys['ArrowUp']) speed = Math.min(speed + 0.008, 0.45);
     else if (keys['s'] || keys['S'] || keys['ArrowDown']) speed = Math.max(speed - 0.012, -0.15);
     else speed *= 0.98;
 
-    // Smoother Steering Sensitivity
-    if (Math.abs(speed) > 0.02) {
-        if (keys['a'] || keys['A'] || keys['ArrowLeft']) rot += 0.022 * (speed >= 0 ? 1 : -1);
-        if (keys['d'] || keys['D'] || keys['ArrowRight']) rot -= 0.022 * (speed >= 0 ? 1 : -1);
+    // Steering
+    if (Math.abs(speed) > 0.01) {
+        let turnDir = speed >= 0 ? 1 : -1;
+        if (keys['a'] || keys['A'] || keys['ArrowLeft']) rot += 0.024 * turnDir;
+        if (keys['d'] || keys['D'] || keys['ArrowRight']) rot -= 0.024 * turnDir;
     }
 
     let nextX = car.position.x + Math.sin(rot) * speed;
     let nextZ = car.position.z + Math.cos(rot) * speed;
 
-    // Soft Edge Slide Physics (Prevents Crashing into Walls)
+    // Soft Edge Friction
     if (currentCurve && !isEditorMode) {
-        let closestU = 0, minDistance = Infinity;
-        for (let u = 0; u <= 1; u += 0.02) {
+        let minDistance = Infinity;
+        for (let u = 0; u <= 1; u += 0.04) {
             let pt = currentCurve.getPoint(u);
             let dist = Math.hypot(pt.x - nextX, pt.z - nextZ);
-            if (dist < minDistance) {
-                minDistance = dist;
-                closestU = u;
-            }
+            if (dist < minDistance) minDistance = dist;
         }
 
         let statusText = document.getElementById("hud-status");
-        if (minDistance > TRACK_WIDTH * 0.8) {
-            // Soft friction slowing down without crashing or stopping completely
-            speed *= 0.85; 
-            car.position.x = nextX;
-            car.position.z = nextZ;
+        if (minDistance > TRACK_WIDTH * 0.75) {
+            speed *= 0.9; // Smoothly slows car near outer edges
             if (statusText) { statusText.innerText = "OFF TRACK"; statusText.style.color = "#ffaa00"; }
         } else {
             if (statusText) { statusText.innerText = "ON TRACK"; statusText.style.color = "#00ffcc"; }
-            car.position.x = nextX;
-            car.position.z = nextZ;
         }
-    } else {
-        car.position.x = nextX;
-        car.position.z = nextZ;
     }
+
+    car.position.x = nextX;
+    car.position.z = nextZ;
 
     // Boost Pads
     boosters.forEach(b => {
         if (Math.hypot(b.x - car.position.x, b.z - car.position.z) < 4) {
-            speed = 0.85; // Speed boost surge
+            speed = 0.8;
         }
     });
 
@@ -321,7 +322,7 @@ function animate() {
         }
     });
 
-    // Jump Gravity
+    // Gravity
     if (!isGrounded) {
         carY += verticalSpeed;
         verticalSpeed -= 0.02;
@@ -334,7 +335,7 @@ function animate() {
     car.position.y = carY;
     car.rotation.y = rot;
 
-    // Camera Follow
+    // Camera Tracking
     camera.position.x = car.position.x - Math.sin(rot) * 12;
     camera.position.z = car.position.z - Math.cos(rot) * 12;
     camera.position.y = car.position.y + 6;
@@ -345,4 +346,11 @@ function animate() {
     if (speedDisplay) speedDisplay.innerText = `${Math.round(Math.abs(speed * 180))} KM/H`;
 
     renderer.render(scene, camera);
+}
+
+function onResize() {
+    if (!camera || !renderer) return;
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
 }
