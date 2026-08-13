@@ -1,5 +1,5 @@
 // ==========================================
-// 1. FIREBASE CONFIGURATION (Your Database)
+// 1. FIREBASE CONFIGURATION
 // ==========================================
 var firebaseConfig = {
   apiKey: "AIzaSyBhBjB9cD8IDFarhBMUoG_jhL_Gl277ZG8",
@@ -27,7 +27,7 @@ var player = {
     rot: 0,
     speed: 0,
     lap: 1,
-    maxLaps: 5, // 5-Lap Mode
+    maxLaps: 5,
     color: 0
 };
 
@@ -127,8 +127,13 @@ function menu2() {
     player.name = playerName;
     player.color = color;
 
+    // Hide Main Menu Overlay
     var fore = document.getElementById("fore");
     if (fore) fore.style.display = "none";
+
+    // Reveal Clean HUD Card
+    var hud = document.getElementById("game-hud");
+    if (hud) hud.style.display = "block";
 
     initEngine();
     initMultiplayer();
