@@ -1,0 +1,288 @@
+/* Core Styling & Variables */
+:root {
+    --bg-dark: #0f0f19;
+    --card-bg: #181828;
+    --accent-orange: #ff9900;
+    --accent-green: #00cc66;
+    --accent-blue: #0088ff;
+    --accent-red: #ff3355;
+    --accent-purple: #aa00ff;
+    --text-color: #ffffff;
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    user-select: none;
+}
+
+body, html {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background-color: var(--bg-dark);
+    font-family: 'Press Start 2P', monospace;
+    color: var(--text-color);
+}
+
+/* Three.js Canvas */
+canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 1;
+}
+
+/* Utilities */
+.hidden {
+    display: none !important;
+}
+
+.overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(15, 15, 25, 0.94);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 25px;
+    z-index: 10;
+}
+
+/* Typography & Inputs */
+.game-title {
+    font-size: 26px;
+    color: var(--accent-orange);
+    text-shadow: 4px 4px #ff0055;
+    text-align: center;
+    letter-spacing: 1px;
+}
+
+.section-title {
+    font-size: 18px;
+    color: #fff;
+}
+
+.input-group {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    align-items: center;
+}
+
+.input-group label {
+    font-size: 10px;
+    color: #aaa;
+}
+
+input {
+    padding: 12px 18px;
+    font-family: inherit;
+    font-size: 12px;
+    border: 2px solid var(--accent-orange);
+    background: #05050a;
+    color: #fff;
+    text-align: center;
+    border-radius: 6px;
+    width: 260px;
+    outline: none;
+}
+
+/* Buttons */
+.menu-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.btn {
+    padding: 14px 24px;
+    font-family: inherit;
+    font-size: 11px;
+    color: #fff;
+    border: 2px solid #fff;
+    border-radius: 6px;
+    cursor: pointer;
+    width: 260px;
+    text-align: center;
+    transition: transform 0.1s ease;
+}
+
+.btn:active {
+    transform: translateY(2px);
+}
+
+.btn-green  { background: var(--accent-green); box-shadow: 0 4px 0 #006633; }
+.btn-blue   { background: var(--accent-blue);  box-shadow: 0 4px 0 #004499; }
+.btn-orange { background: var(--accent-orange); box-shadow: 0 4px 0 #884400; }
+.btn-red    { background: var(--accent-red);    box-shadow: 0 4px 0 #880022; }
+.btn-purple { background: var(--accent-purple); box-shadow: 0 4px 0 #550099; }
+
+.btn-sm {
+    padding: 10px 14px;
+    font-size: 9px;
+    width: auto;
+}
+
+/* Modal Host Grid Window */
+#host-modal {
+    padding: 40px;
+    justify-content: flex-start;
+}
+
+.modal-header {
+    width: 100%;
+    max-width: 900px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.modal-header h2 {
+    font-size: 16px;
+    color: var(--accent-orange);
+}
+
+.btn-close {
+    background: none;
+    border: none;
+    color: #fff;
+    font-size: 20px;
+    cursor: pointer;
+    font-family: inherit;
+}
+
+.map-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+    width: 100%;
+    max-width: 900px;
+}
+
+.map-card {
+    background: var(--card-bg);
+    border: 2px solid #333;
+    border-radius: 8px;
+    overflow: hidden;
+    cursor: pointer;
+    transition: border-color 0.2s, transform 0.2s;
+}
+
+.map-card:hover {
+    border-color: var(--accent-orange);
+    transform: translateY(-4px);
+}
+
+.map-preview {
+    height: 100px;
+    background: #0a0a12;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.oval-bg { background: linear-gradient(45deg, #1e3c72, #2a5298); }
+.twisty-bg { background: linear-gradient(45deg, #00b09b, #96c93d); }
+.figure8-bg { background: linear-gradient(45deg, #8a2387, #e94057); }
+.desert-bg { background: linear-gradient(45deg, #f857a6, #ff5858); }
+.custom-bg { background: linear-gradient(45deg, #4776e6, #8e54e9); }
+.editor-bg { background: linear-gradient(45deg, #aa00ff, #ff0055); }
+
+.editor-card {
+    border-color: var(--accent-purple);
+}
+
+.editor-icon {
+    font-size: 32px;
+}
+
+.map-info {
+    padding: 12px;
+}
+
+.map-info h3 {
+    font-size: 10px;
+    color: #fff;
+    margin-bottom: 6px;
+}
+
+.map-info p {
+    font-size: 8px;
+    color: #aaa;
+}
+
+/* In-Game HUD Overlay */
+#game-hud {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    z-index: 5;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 8px;
+}
+
+.hud-box {
+    background: rgba(0, 0, 0, 0.85);
+    border: 2px solid var(--accent-orange);
+    border-radius: 8px;
+    padding: 14px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.hud-item {
+    font-size: 10px;
+}
+
+.highlight-cyan { color: #00ffcc; }
+.highlight-yellow { color: #ffcc00; }
+.highlight-orange { color: #ff4400; }
+
+.hud-controls-hint {
+    font-size: 8px;
+    color: #bbb;
+    background: rgba(0, 0, 0, 0.7);
+    padding: 6px 10px;
+    border-radius: 4px;
+}
+
+/* Track Editor Controls UI */
+#editor-ui {
+    position: absolute;
+    bottom: 25px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 5;
+}
+
+.editor-bar {
+    background: rgba(0, 0, 0, 0.9);
+    border: 2px solid var(--accent-purple);
+    border-radius: 8px;
+    padding: 12px 20px;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}
+
+.editor-title {
+    font-size: 10px;
+    color: var(--accent-purple);
+}
+
+.editor-buttons {
+    display: flex;
+    gap: 8px;
+}
