@@ -1,42 +1,52 @@
 // ==========================================
-// 1. TRACK PRESETS & DATA CONFIG
+// 1. CONFIG & PRESETS
 // ==========================================
-const TRACK_WIDTH = 12; // Maximum distance allowed from lane center
+const TRACK_WIDTH = 18; // Much wider lane allowance
 
 const PRESET_TRACKS = {
     oval: [
-        {x: -40, z: -80}, {x: 40, z: -80}, {x: 80, z: -40}, 
-        {x: 80, z: 40}, {x: 40, z: 80}, {x: -40, z: 80}, 
-        {x: -80, z: 40}, {x: -80, z: -40}
+        {x: -60, z: -100}, {x: 60, z: -100}, {x: 100, z: -50}, 
+        {x: 100, z: 50}, {x: 60, z: 100}, {x: -60, z: 100}, 
+        {x: -100, z: 50}, {x: -100, z: -50}
     ],
     twisty: [
-        {x: -60, z: -60}, {x: 0, z: -90}, {x: 60, z: -60},
-        {x: 20, z: 0}, {x: 80, z: 60}, {x: -20, z: 90},
-        {x: -80, z: 30}, {x: -40, z: -30}
+        {x: -70, z: -70}, {x: 0, z: -100}, {x: 70, z: -70},
+        {x: 30, z: 0}, {x: 90, z: 70}, {x: -30, z: 100},
+        {x: -90, z: 30}, {x: -50, z: -30}
     ],
     stunt: [
-        {x: -80, z: -80}, {x: 0, z: -100}, {x: 80, z: -80},
-        {x: 100, z: 0}, {x: 80, z: 80}, {x: -80, z: 80}
+        {x: -90, z: -90}, {x: 0, z: -110}, {x: 90, z: -90},
+        {x: 110, z: 0}, {x: 90, z: 90}, {x: -90, z: 90}
     ]
 };
 
 let customTrackNodes = JSON.parse(localStorage.getItem("customTrackNodes")) || [
-    {x: -50, z: -50}, {x: 50, z: -50}, {x: 50, z: 50}, {x: -50, z: 50}
+    {x: -60, z: -60}, {x: 60, z: -60}, {x: 60, z: 60}, {x: -60, z: 60}
 ];
 
 let currentTrackPoints = [];
 let currentCurve = null;
-let selectedCarStyle = 'sport';
 
-// UI Switcher
-function selectCarStyle(style, btn) {
-    selectedCarStyle = style;
-    document.querySelectorAll('.car-btn').forEach(b => b.classList.remove('active'));
+// Customization Config
+let carModel = 'sport';
+let carColorHex = 0xff0055;
+
+function setCarModel(model, btn) {
+    carModel = model;
+    document.querySelectorAll('.opt-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
 }
 
+function setCarColor(color, swatch) {
+    carColorHex = color;
+    document.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('active'));
+    swatch.classList.add('active');
+}
+
+// UI Navigation
 function hideAllScreens() {
     document.getElementById("main-menu").classList.add("hidden");
+    document.getElementById("garage-menu").classList.add("hidden");
     document.getElementById("host-modal").classList.add("hidden");
     document.getElementById("join-menu").classList.add("hidden");
     document.getElementById("game-hud").classList.add("hidden");
@@ -44,18 +54,19 @@ function hideAllScreens() {
 }
 
 function showMainMenu() { hideAllScreens(); document.getElementById("main-menu").classList.remove("hidden"); }
+function showGarage() { hideAllScreens(); document.getElementById("garage-menu").classList.remove("hidden"); }
 function showHostGrid() { hideAllScreens(); document.getElementById("host-modal").classList.remove("hidden"); }
 function showJoinMenu() { hideAllScreens(); document.getElementById("join-menu").classList.remove("hidden"); }
 
 // ==========================================
-// 2. ENGINE, ENVIRONMENT & CAR SETUP
+// 2. ENGINE & CAR BUILDER
 // ==========================================
 let scene, camera, renderer, car;
-let boosters = [];
-let jumps = [];
-let trackMesh = null, innerWall = null, outerWall = null;
+let boosters = [], jumps = [];
+let trackMesh = null;
 let editorMarkers = [];
 
+// Tuned Physics (Slower & Smoother Steering)
 let speed = 0, rot = 0, verticalSpeed = 0, carY = 0;
 let isGrounded = true;
 let keys = {};
@@ -66,20 +77,19 @@ function initEngine() {
 
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0x87ceeb);
-    scene.fog = new THREE.FogExp2(0x87ceeb, 0.003);
+    scene.fog = new THREE.FogExp2(0x87ceeb, 0.002);
 
     camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 1000);
     renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     document.body.appendChild(renderer.domElement);
 
-    // Lights
-    scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+    scene.add(new THREE.AmbientLight(0xffffff, 0.7));
     let sun = new THREE.DirectionalLight(0xffffff, 0.8);
     sun.position.set(100, 200, 100);
     scene.add(sun);
 
-    // Background Scenery (Ground Plane & Distant Mountains)
+    // Ground & Mountains
     let ground = new THREE.Mesh(
         new THREE.PlaneGeometry(800, 800),
         new THREE.MeshLambertMaterial({ color: 0x3b7a57 })
@@ -87,7 +97,7 @@ function initEngine() {
     ground.rotation.x = -Math.PI / 2;
     scene.add(ground);
 
-    createBackgroundMountains();
+    createMountains();
 
     window.addEventListener('keydown', e => keys[e.key] = true);
     window.addEventListener('keyup', e => keys[e.key] = false);
@@ -95,39 +105,40 @@ function initEngine() {
     animate();
 }
 
-function createBackgroundMountains() {
-    let mtnGeo = new THREE.ConeGeometry(30, 60, 5);
+function createMountains() {
+    let mtnGeo = new THREE.ConeGeometry(35, 70, 5);
     let mtnMat = new THREE.MeshLambertMaterial({ color: 0x556677 });
 
-    for (let i = 0; i < 20; i++) {
-        let mountain = new THREE.Mesh(mtnGeo, mtnMat);
-        let angle = (i / 20) * Math.PI * 2;
-        mountain.position.set(Math.cos(angle) * 300, 25, Math.sin(angle) * 300);
-        mountain.scale.set(1 + Math.random(), 1 + Math.random() * 0.8, 1 + Math.random());
-        scene.add(mountain);
+    for (let i = 0; i < 18; i++) {
+        let mtn = new THREE.Mesh(mtnGeo, mtnMat);
+        let angle = (i / 18) * Math.PI * 2;
+        mtn.position.set(Math.cos(angle) * 320, 30, Math.sin(angle) * 320);
+        scene.add(mtn);
     }
 }
 
-// Custom Vehicle Models
-function buildSelectedCar() {
+function buildCustomCar() {
     if (car) scene.remove(car);
     car = new THREE.Group();
 
-    if (selectedCarStyle === 'truck') {
-        let body = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.8, 2.6), new THREE.MeshLambertMaterial({ color: 0x3366cc }));
+    let bodyMat = new THREE.MeshLambertMaterial({ color: carColorHex });
+    let cabinMat = new THREE.MeshLambertMaterial({ color: 0x111111 });
+
+    if (carModel === 'truck') {
+        let body = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.8, 2.6), bodyMat);
         body.position.y = 0.5;
-        let cabin = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.7, 1.2), new THREE.MeshLambertMaterial({ color: 0x111111 }));
+        let cabin = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.7, 1.2), cabinMat);
         cabin.position.set(0, 1.1, -0.2);
         car.add(body, cabin);
-    } else if (selectedCarStyle === 'cyber') {
-        let body = new THREE.Mesh(new THREE.ConeGeometry(1.2, 2.8, 4), new THREE.MeshLambertMaterial({ color: 0x00ffcc }));
+    } else if (carModel === 'cyber') {
+        let body = new THREE.Mesh(new THREE.ConeGeometry(1.3, 2.8, 4), bodyMat);
         body.rotation.x = Math.PI / 2;
         body.position.y = 0.4;
         car.add(body);
     } else { // Sport
-        let body = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.4, 2.5), new THREE.MeshLambertMaterial({ color: 0xff0055 }));
+        let body = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.4, 2.5), bodyMat);
         body.position.y = 0.3;
-        let cabin = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.4, 1.1), new THREE.MeshLambertMaterial({ color: 0x111111 }));
+        let cabin = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.4, 1.1), cabinMat);
         cabin.position.set(0, 0.6, -0.2);
         car.add(body, cabin);
     }
@@ -136,12 +147,10 @@ function buildSelectedCar() {
 }
 
 // ==========================================
-// 3. TRACK MESH & OBJECT BUILDER
+// 3. TRACK & ENVIRONMENT
 // ==========================================
-function clearSceneObjects() {
+function clearObjects() {
     if (trackMesh) scene.remove(trackMesh);
-    if (innerWall) scene.remove(innerWall);
-    if (outerWall) scene.remove(outerWall);
     boosters.forEach(b => scene.remove(b.mesh));
     jumps.forEach(j => scene.remove(j.mesh));
     boosters = [];
@@ -149,26 +158,18 @@ function clearSceneObjects() {
 }
 
 function buildTrack(points) {
-    clearSceneObjects();
+    clearObjects();
 
     let vectors = points.map(p => new THREE.Vector3(p.x, 0.1, p.z));
     currentCurve = new THREE.CatmullRomCurve3(vectors, true);
 
-    // Asphalt Track
     let roadGeo = new THREE.TubeGeometry(currentCurve, 100, TRACK_WIDTH, 8, true);
     let roadMat = new THREE.MeshLambertMaterial({ color: 0x222225 });
     trackMesh = new THREE.Mesh(roadGeo, roadMat);
     trackMesh.scale.y = 0.01;
     scene.add(trackMesh);
 
-    // Side Walls
-    let wallGeo = new THREE.TubeGeometry(currentCurve, 100, TRACK_WIDTH + 1, 8, true);
-    let wallMat = new THREE.MeshLambertMaterial({ color: 0xffaa00, wireframe: true });
-    outerWall = new THREE.Mesh(wallGeo, wallMat);
-    outerWall.scale.y = 0.1;
-    scene.add(outerWall);
-
-    // Spawn Boost Pads & Stunt Ramps on Track Path
+    // Boost & Ramp Placement
     for (let i = 0; i < points.length; i++) {
         let p = points[i];
         if (i % 2 === 0) createBoosterPad(p.x, p.z);
@@ -177,26 +178,22 @@ function buildTrack(points) {
 }
 
 function createBoosterPad(x, z) {
-    let padGeo = new THREE.BoxGeometry(4, 0.2, 4);
-    let padMat = new THREE.MeshBasicMaterial({ color: 0x00ffff });
-    let pad = new THREE.Mesh(padGeo, padMat);
+    let pad = new THREE.Mesh(new THREE.BoxGeometry(4, 0.2, 4), new THREE.MeshBasicMaterial({ color: 0x00ffff }));
     pad.position.set(x, 0.15, z);
     scene.add(pad);
     boosters.push({ mesh: pad, x: x, z: z });
 }
 
 function createRampJump(x, z) {
-    let rampGeo = new THREE.BoxGeometry(6, 1.5, 6);
-    let rampMat = new THREE.MeshLambertMaterial({ color: 0xff3300 });
-    let ramp = new THREE.Mesh(rampGeo, rampMat);
+    let ramp = new THREE.Mesh(new THREE.BoxGeometry(6, 1.2, 6), new THREE.MeshLambertMaterial({ color: 0xff3300 }));
     ramp.rotation.x = -Math.PI / 6;
-    ramp.position.set(x, 0.5, z);
+    ramp.position.set(x, 0.4, z);
     scene.add(ramp);
     jumps.push({ mesh: ramp, x: x, z: z });
 }
 
 // ==========================================
-// 4. GAME & EDITOR LAUNCHERS
+// 4. GAME ENGINE CONTROLS
 // ==========================================
 function startRace(trackKey) {
     initEngine();
@@ -206,7 +203,7 @@ function startRace(trackKey) {
 
     currentTrackPoints = (trackKey === 'custom') ? customTrackNodes : PRESET_TRACKS[trackKey] || PRESET_TRACKS.oval;
     buildTrack(currentTrackPoints);
-    buildSelectedCar();
+    buildCustomCar();
 
     car.position.set(currentTrackPoints[0].x, 0, currentTrackPoints[0].z);
     speed = 0; rot = 0; carY = 0;
@@ -227,17 +224,14 @@ function updateEditor() {
     editorMarkers = [];
 
     currentTrackPoints.forEach(p => {
-        let marker = new THREE.Mesh(
-            new THREE.CylinderGeometry(1, 1, 3),
-            new THREE.MeshBasicMaterial({ color: 0xaa00ff })
-        );
+        let marker = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 3), new THREE.MeshBasicMaterial({ color: 0xaa00ff }));
         marker.position.set(p.x, 1.5, p.z);
         scene.add(marker);
         editorMarkers.push(marker);
     });
 
     buildTrack(currentTrackPoints);
-    buildSelectedCar();
+    buildCustomCar();
 }
 
 function addTrackNode() {
@@ -248,14 +242,14 @@ function addTrackNode() {
 }
 
 function clearTrackNodes() {
-    currentTrackPoints = [{x:-40,z:-40},{x:40,z:-40},{x:40,z:40},{x:-40,z:40}];
+    currentTrackPoints = [{x:-50,z:-50},{x:50,z:-50},{x:50,z:50},{x:-50,z:50}];
     updateEditor();
 }
 
 function saveCustomTrack() {
     customTrackNodes = [...currentTrackPoints];
     localStorage.setItem("customTrackNodes", JSON.stringify(customTrackNodes));
-    alert("Track Saved!");
+    alert("Custom Track Saved!");
 }
 
 function exitEditor() {
@@ -264,25 +258,27 @@ function exitEditor() {
 }
 
 // ==========================================
-// 5. ANIMATION & TRACK-BOUND PHYSICS
+// 5. ANIMATION & EASY HANDLING PHYSICS
 // ==========================================
 function animate() {
     requestAnimationFrame(animate);
 
-    // Throttle & Turn
-    if (keys['w'] || keys['W'] || keys['ArrowUp']) speed = Math.min(speed + 0.012, 0.55);
-    else if (keys['s'] || keys['S'] || keys['ArrowDown']) speed = Math.max(speed - 0.012, -0.2);
-    else speed *= 0.985;
+    // Gentler Throttle & Brakes
+    if (keys['w'] || keys['W'] || keys['ArrowUp']) speed = Math.min(speed + 0.008, 0.45);
+    else if (keys['s'] || keys['S'] || keys['ArrowDown']) speed = Math.max(speed - 0.012, -0.15);
+    else speed *= 0.98;
 
-    if (keys['a'] || keys['A'] || keys['ArrowLeft']) rot += 0.035;
-    if (keys['d'] || keys['D'] || keys['ArrowRight']) rot -= 0.035;
+    // Smoother Steering Sensitivity
+    if (Math.abs(speed) > 0.02) {
+        if (keys['a'] || keys['A'] || keys['ArrowLeft']) rot += 0.022 * (speed >= 0 ? 1 : -1);
+        if (keys['d'] || keys['D'] || keys['ArrowRight']) rot -= 0.022 * (speed >= 0 ? 1 : -1);
+    }
 
     let nextX = car.position.x + Math.sin(rot) * speed;
     let nextZ = car.position.z + Math.cos(rot) * speed;
 
-    // Strict Track-Lane Constraint System
+    // Soft Edge Slide Physics (Prevents Crashing into Walls)
     if (currentCurve && !isEditorMode) {
-        // Find closest point on spline path
         let closestU = 0, minDistance = Infinity;
         for (let u = 0; u <= 1; u += 0.02) {
             let pt = currentCurve.getPoint(u);
@@ -294,10 +290,12 @@ function animate() {
         }
 
         let statusText = document.getElementById("hud-status");
-        if (minDistance > TRACK_WIDTH * 0.75) {
-            // Repel / Bounce off lane edges
-            speed = -speed * 0.5;
-            if (statusText) { statusText.innerText = "LANE WARNING!"; statusText.style.color = "#ff3355"; }
+        if (minDistance > TRACK_WIDTH * 0.8) {
+            // Soft friction slowing down without crashing or stopping completely
+            speed *= 0.85; 
+            car.position.x = nextX;
+            car.position.z = nextZ;
+            if (statusText) { statusText.innerText = "OFF TRACK"; statusText.style.color = "#ffaa00"; }
         } else {
             if (statusText) { statusText.innerText = "ON TRACK"; statusText.style.color = "#00ffcc"; }
             car.position.x = nextX;
@@ -308,25 +306,25 @@ function animate() {
         car.position.z = nextZ;
     }
 
-    // Boost Pad Collisions
+    // Boost Pads
     boosters.forEach(b => {
-        if (Math.hypot(b.x - car.position.x, b.z - car.position.z) < 3.5) {
-            speed = 1.1; // Instant Speed Surge
+        if (Math.hypot(b.x - car.position.x, b.z - car.position.z) < 4) {
+            speed = 0.85; // Speed boost surge
         }
     });
 
-    // Jump Ramp Physics
+    // Jump Ramps
     jumps.forEach(j => {
-        if (Math.hypot(j.x - car.position.x, j.z - car.position.z) < 3.5 && isGrounded) {
-            verticalSpeed = 0.45; // Launch into air
+        if (Math.hypot(j.x - car.position.x, j.z - car.position.z) < 4 && isGrounded) {
+            verticalSpeed = 0.35;
             isGrounded = false;
         }
     });
 
-    // Gravity for Airborne Jumps
+    // Jump Gravity
     if (!isGrounded) {
         carY += verticalSpeed;
-        verticalSpeed -= 0.025; // Gravity acceleration
+        verticalSpeed -= 0.02;
         if (carY <= 0) {
             carY = 0;
             isGrounded = true;
@@ -336,13 +334,13 @@ function animate() {
     car.position.y = carY;
     car.rotation.y = rot;
 
-    // Dynamic Camera Tracking
-    camera.position.x = car.position.x - Math.sin(rot) * 11;
-    camera.position.z = car.position.z - Math.cos(rot) * 11;
-    camera.position.y = car.position.y + 5.5 + carY * 0.5;
+    // Camera Follow
+    camera.position.x = car.position.x - Math.sin(rot) * 12;
+    camera.position.z = car.position.z - Math.cos(rot) * 12;
+    camera.position.y = car.position.y + 6;
     camera.lookAt(car.position.x, car.position.y + 0.5, car.position.z);
 
-    // HUD Update
+    // Speedometer
     let speedDisplay = document.getElementById("hud-speed");
     if (speedDisplay) speedDisplay.innerText = `${Math.round(Math.abs(speed * 180))} KM/H`;
 
