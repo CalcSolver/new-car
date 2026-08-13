@@ -12,12 +12,12 @@ var firebaseConfig = {
   measurementId: "G-R80VNMYKWR"
 };
 
-// Initialize Firebase compatibility SDK
+// Initialize Firebase
 if (typeof firebase !== 'undefined' && !firebase.apps.length) {
   firebase.initializeApp(firebaseConfig);
 }
 
-// Global Variables & Game Settings
+// Core Game Variables
 var database = typeof firebase !== 'undefined' ? firebase.database() : null;
 var scene, camera, renderer;
 var player = {
@@ -27,24 +27,91 @@ var player = {
     rot: 0,
     speed: 0,
     lap: 1,
-    maxLaps: 5, // UPGRADED: Set to 5 Laps
+    maxLaps: 5, // 5-Lap Mode
     color: 0
 };
 
-// UPGRADED: Physics parameters for faster car performance
-var MAX_SPEED = 1.0;     // Increased top speed (Original was ~0.5)
-var ACCELERATION = 0.025; // Punchier takeoff speed
-var FRICTION = 0.98;     // Momentum decay rate
-var TURN_SPEED = 0.045;  // Sharper handling
+// Faster Car Performance Parameters
+var BASE_MAX_SPEED = 1.1;     
+var MAX_SPEED = BASE_MAX_SPEED;
+var NITRO_SPEED = 2.4;
+var ACCELERATION = 0.03; 
+var FRICTION = 0.98;     
+var TURN_SPEED = 0.048;  
+
+// Nitro & Currency Inventory (Saved in Local Storage)
+var coins = parseInt(localStorage.getItem("racingCoins")) || 0;
+var nitroCount = parseInt(localStorage.getItem("nitroCount")) || 3; 
+var isNitroActive = false;
+
+// Visual Particles for Flame Effect
+var flameParticles = [];
+var flameGroup = null;
 
 var opponents = {};
 var keys = {};
-
-// ==========================================
-// 2. MENU & UI LOGIC
-// ==========================================
 var color = 0;
 
+// ==========================================
+// 2. NITRO & COIN FUNCTIONS
+// ==========================================
+function updateHUD() {
+    var coinDisplay = document.getElementById("hud-coins");
+    var nitroDisplay = document.getElementById("hud-nitro");
+    var lapDisplay = document.getElementById("hud-lap");
+    if (coinDisplay) coinDisplay.innerText = coins;
+    if (nitroDisplay) nitroDisplay.innerText = nitroCount;
+    if (lapDisplay) lapDisplay.innerText = player.lap;
+}
+
+function saveData() {
+    localStorage.setItem("racingCoins", coins);
+    localStorage.setItem("nitroCount", nitroCount);
+}
+
+function addCoins(amount) {
+    coins += amount;
+    saveData();
+    updateHUD();
+}
+
+function buyNitro() {
+    if (coins >= 50) {
+        coins -= 50;
+        nitroCount++;
+        saveData();
+        updateHUD();
+        alert("Purchased 1 Nitro Bottle!");
+    } else {
+        alert("Not enough coins! You need 50 coins to buy Nitro.");
+    }
+}
+
+function activateNitro() {
+    if (nitroCount > 0 && !isNitroActive) {
+        nitroCount--;
+        isNitroActive = true;
+        saveData();
+        updateHUD();
+
+        MAX_SPEED = NITRO_SPEED;
+        player.speed = NITRO_SPEED;
+
+        // Show 3D Flame Particles
+        if (flameGroup) flameGroup.visible = true;
+
+        // Nitro lasts for 2.5 seconds
+        setTimeout(function() {
+            MAX_SPEED = BASE_MAX_SPEED;
+            isNitroActive = false;
+            if (flameGroup) flameGroup.visible = false;
+        }, 2500);
+    }
+}
+
+// ==========================================
+// 3. ENGINE & THREE.JS SCENE
+// ==========================================
 function updateColor() {
     var slider = document.getElementById("slider");
     if (slider) {
@@ -55,85 +122,116 @@ function updateColor() {
 function menu2() {
     var nameInput = document.getElementById("name");
     var playerName = nameInput ? nameInput.value.trim() : "";
-    if (!playerName) playerName = "Player" + Math.floor(Math.random() * 1000);
+    if (!playerName) playerName = "Racer" + Math.floor(Math.random() * 1000);
     
     player.name = playerName;
     player.color = color;
 
-    // Hide Menu Overlay
     var fore = document.getElementById("fore");
     if (fore) fore.style.display = "none";
 
-    // Initialize 3D Engine & Multiplayer
     initEngine();
     initMultiplayer();
+    updateHUD();
 }
 
-// Frame-busting / prevent embedding in unauthorized external sites
-if (window.top !== window.self) {
-    try {
-        window.top.location.href = window.self.location.href;
-    } catch(e) {}
-}
-
-// ==========================================
-// 3. THREE.JS 3D SCENE SETUP
-// ==========================================
 function initEngine() {
     scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x87ceeb); // Sky blue background
+    scene.background = new THREE.Color(0x87ceeb);
 
     camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
     renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     document.body.appendChild(renderer.domElement);
 
-    // Basic Ambient and Directional Lighting
-    var ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+    // Lighting
+    var ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
     scene.add(ambientLight);
 
     var dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
     dirLight.position.set(100, 200, 100);
     scene.add(dirLight);
 
-    // Track Ground Plane
-    var groundGeo = new THREE.PlaneGeometry(500, 500);
-    var groundMat = new THREE.MeshLambertMaterial({ color: 0x228b22 });
+    // Ground Plane
+    var groundGeo = new THREE.PlaneGeometry(600, 600);
+    var groundMat = new THREE.MeshLambertMaterial({ color: 0x2e8b57 });
     var ground = new THREE.Mesh(groundGeo, groundMat);
     ground.rotation.x = -Math.PI / 2;
     scene.add(ground);
 
-    // Create Local Player Car Mesh
-    createCarMesh(player);
+    // Create Local Player Car with Flame Jets
+    createCarMesh(player, true);
 
-    // Controls listeners
-    window.addEventListener('keydown', function(e) { keys[e.key] = true; });
+    // Input Listeners
+    window.addEventListener('keydown', function(e) { 
+        keys[e.key] = true; 
+        if (e.code === 'Space' || e.key === ' ') {
+            activateNitro();
+        }
+    });
     window.addEventListener('keyup', function(e) { keys[e.key] = false; });
     window.addEventListener('resize', onWindowResize);
 
-    // Start Game Loop
     animate();
 }
 
-function createCarMesh(pObj) {
+// Car Geometry Builder
+function createCarMesh(pObj, isLocalPlayer) {
     var carGroup = new THREE.Group();
+
+    // Body
     var bodyGeo = new THREE.BoxGeometry(1.5, 0.6, 2.8);
     var bodyMat = new THREE.MeshLambertMaterial({ color: new THREE.Color("hsl(" + (pObj.color || 0) + ", 100%, 50%)") });
     var body = new THREE.Mesh(bodyGeo, bodyMat);
     body.position.y = 0.3;
     carGroup.add(body);
 
+    // Cabin
+    var cabinGeo = new THREE.BoxGeometry(1.2, 0.5, 1.3);
+    var cabinMat = new THREE.MeshLambertMaterial({ color: 0x111111 });
+    var cabin = new THREE.Mesh(cabinGeo, cabinMat);
+    cabin.position.set(0, 0.7, -0.2);
+    carGroup.add(cabin);
+
+    // Build 3D Exhaust Flames for Player Car
+    if (isLocalPlayer) {
+        flameGroup = new THREE.Group();
+        
+        var particleGeo = new THREE.ConeGeometry(0.18, 0.8, 6);
+        particleGeo.rotateX(-Math.PI / 2); // Point exhaust backwards
+        
+        var flameMat = new THREE.MeshBasicMaterial({ color: 0xff3300 });
+        var innerFlameMat = new THREE.MeshBasicMaterial({ color: 0xffff00 });
+
+        var leftFlame = new THREE.Mesh(particleGeo, flameMat);
+        leftFlame.position.set(-0.4, 0.3, -1.7);
+
+        var rightFlame = new THREE.Mesh(particleGeo, flameMat);
+        rightFlame.position.set(0.4, 0.3, -1.7);
+
+        var coreFlame = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.6, 6), innerFlameMat);
+        coreFlame.geometry.rotateX(-Math.PI / 2);
+        coreFlame.position.set(0, 0.3, -1.6);
+
+        flameGroup.add(leftFlame);
+        flameGroup.add(rightFlame);
+        flameGroup.add(coreFlame);
+
+        flameGroup.visible = false; // Hidden until Nitro is activated
+        carGroup.add(flameGroup);
+    }
+
     scene.add(carGroup);
     pObj.mesh = carGroup;
 }
 
 // ==========================================
-// 4. GAMEPLAY LOOP & CAR PHYSICS
+// 4. ANIMATION LOOP & PHYSICS
 // ==========================================
 function animate() {
     requestAnimationFrame(animate);
 
-    // Drive Input Mechanics
+    // Acceleration & Reverse
     if (keys['ArrowUp'] || keys['w'] || keys['W']) {
         player.speed = Math.min(player.speed + ACCELERATION, MAX_SPEED);
     } else if (keys['ArrowDown'] || keys['s'] || keys['S']) {
@@ -142,6 +240,7 @@ function animate() {
         player.speed *= FRICTION;
     }
 
+    // Steering
     if (keys['ArrowLeft'] || keys['a'] || keys['A']) {
         player.rot += TURN_SPEED * (player.speed >= 0 ? 1 : -1);
     }
@@ -149,7 +248,13 @@ function animate() {
         player.rot -= TURN_SPEED * (player.speed >= 0 ? 1 : -1);
     }
 
-    // Position updates
+    // Flame flicker animation
+    if (isNitroActive && flameGroup) {
+        var scaleFlicker = 0.8 + Math.random() * 0.5;
+        flameGroup.scale.set(scaleFlicker, scaleFlicker, scaleFlicker * 1.3);
+    }
+
+    // Move Car Position
     player.x += Math.sin(player.rot) * player.speed;
     player.z += Math.cos(player.rot) * player.speed;
 
@@ -158,13 +263,13 @@ function animate() {
         player.mesh.rotation.y = player.rot;
     }
 
-    // Follow-Camera Logic
+    // Smooth Third-Person Camera
     camera.position.x = player.x - Math.sin(player.rot) * 8;
     camera.position.z = player.z - Math.cos(player.rot) * 8;
     camera.position.y = player.y + 4;
     camera.lookAt(player.x, player.y + 1, player.z);
 
-    // Broadcast Position to Firebase
+    // Sync to Firebase
     syncPositionToFirebase();
 
     renderer.render(scene, camera);
@@ -177,7 +282,7 @@ function onWindowResize() {
 }
 
 // ==========================================
-// 5. FIREBASE MULTIPLAYER SYNC
+// 5. FIREBASE MULTIPLAYER
 // ==========================================
 var playerRef = null;
 
@@ -187,16 +292,14 @@ function initMultiplayer() {
     var playersRef = database.ref('players');
     playerRef = playersRef.push();
 
-    // Remove player on disconnect
     playerRef.onDisconnect().remove();
 
-    // Listen for other players joining/moving
     playersRef.on('child_added', function(snapshot) {
         var id = snapshot.key;
         if (id !== playerRef.key) {
             var data = snapshot.val();
             opponents[id] = data;
-            createCarMesh(opponents[id]);
+            createCarMesh(opponents[id], false);
         }
     });
 
