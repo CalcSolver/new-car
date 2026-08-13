@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D Racing League - Terrain & Boosters</title>
+    <title>3D Racing League</title>
     
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -23,20 +23,40 @@
             <input id="playerName" type="text" placeholder="Enter Name" value="Racer1" maxlength="12" />
         </div>
 
-        <!-- Custom Car Picker -->
-        <div class="car-selector-box">
-            <label>CHOOSE YOUR RIDE</label>
-            <div class="car-options">
-                <button class="car-btn active" onclick="selectCarStyle('sport', this)">🏎️ Sport</button>
-                <button class="car-btn" onclick="selectCarStyle('truck', this)">🛻 Truck</button>
-                <button class="car-btn" onclick="selectCarStyle('cyber', this)">🚀 Cyber</button>
+        <div class="menu-actions">
+            <button class="btn btn-green" onclick="showHostGrid()">HOST GAME</button>
+            <button class="btn btn-purple" onclick="showGarage()">GARAGE 🚘</button>
+            <button class="btn btn-blue" onclick="showJoinMenu()">JOIN GAME</button>
+        </div>
+    </div>
+
+    <!-- Garage Screen -->
+    <div id="garage-menu" class="overlay hidden">
+        <h2 class="section-title">GARAGE & CUSTOMIZATION</h2>
+        
+        <div class="garage-container">
+            <div class="garage-option">
+                <label>CAR MODEL</label>
+                <div class="button-row">
+                    <button class="opt-btn active" onclick="setCarModel('sport', this)">🏎️ Sport</button>
+                    <button class="opt-btn" onclick="setCarModel('truck', this)">🛻 Truck</button>
+                    <button class="opt-btn" onclick="setCarModel('cyber', this)">🚀 Cyber</button>
+                </div>
+            </div>
+
+            <div class="garage-option">
+                <label>PAINT COLOR</label>
+                <div class="color-picker">
+                    <div class="color-swatch active" style="background: #ff0055;" onclick="setCarColor(0xff0055, this)"></div>
+                    <div class="color-swatch" style="background: #0088ff;" onclick="setCarColor(0x0088ff, this)"></div>
+                    <div class="color-swatch" style="background: #ffcc00;" onclick="setCarColor(0xffcc00, this)"></div>
+                    <div class="color-swatch" style="background: #00cc66;" onclick="setCarColor(0x00cc66, this)"></div>
+                    <div class="color-swatch" style="background: #aa00ff;" onclick="setCarColor(0xaa00ff, this)"></div>
+                </div>
             </div>
         </div>
 
-        <div class="menu-actions">
-            <button class="btn btn-green" onclick="showHostGrid()">HOST GAME</button>
-            <button class="btn btn-blue" onclick="showJoinMenu()">JOIN GAME</button>
-        </div>
+        <button class="btn btn-red" onclick="showMainMenu()">SAVE & EXIT</button>
     </div>
 
     <!-- Host Grid Selection Modal -->
@@ -51,7 +71,7 @@
                 <div class="map-preview oval-bg"></div>
                 <div class="map-info">
                     <h3>SPEEDWAY OVAL</h3>
-                    <p>Flat / High Speed</p>
+                    <p>Flat / Wide Curve</p>
                 </div>
             </div>
 
@@ -110,7 +130,7 @@
             <div class="hud-item">SPEED: <span id="hud-speed" class="highlight-yellow">0 KM/H</span></div>
             <div class="hud-item">STATUS: <span id="hud-status" class="highlight-cyan">ON TRACK</span></div>
         </div>
-        <div class="hud-controls-hint">[WASD] DRIVE | STAY IN LANE</div>
+        <div class="hud-controls-hint">[A/D] STEER | [W] GAS | [S] BRAKE</div>
     </div>
 
     <!-- Track Editor Interface -->
