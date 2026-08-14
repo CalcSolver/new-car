@@ -1,5 +1,5 @@
 // ==========================================
-// 1. GLOBAL CONFIG & TRACK DATA
+// 1. GLOBAL CONFIG & MAP DEFINITIONS
 // ==========================================
 const TRACK_WIDTH = 16;
 const BARRIER_RADIUS = TRACK_WIDTH / 2 - 1.5;
@@ -32,21 +32,30 @@ let currentCurve = null;
 let carModel = 'sport';
 let carColorHex = 0xff0055;
 
-// Host Custom Settings
+// Host Settings
 let selectedTrackKey = 'oval';
 let hostTopSpeed = 0.5;
 let hostTotalLaps = 3;
 let hostBoosterDensity = 'medium';
 
-// Race Progress Tracking
+// Race Progress
 let currentLap = 1;
 let passedCheckpoint = false;
 
-// Nitro System
+// Nitro
 let nitroLevel = 100;
 const MAX_NITRO = 100;
 const NITRO_DRAIN = 0.8;
 const NITRO_RECHARGE = 0.25;
+
+// Multiplayer Network State
+let peer = null;
+let roomCode = null;
+let isHost = false;
+let connections = {}; // Host stores guest connections
+let hostConn = null;  // Guest stores host connection
+let remotePlayers = {}; // id -> Mesh object
+let myPlayerId = 'p_' + Math.floor(Math.random() * 8999 + 1000);
 
 // Global UI Nav
 window.showMainMenu = function() { hideAllScreens(); document.getElementById("main-menu").classList.remove("hidden"); };
@@ -61,6 +70,131 @@ function hideAllScreens() {
     });
 }
 
+// ==========================================
+// 2. MULTIPLAYER ROOM SYSTEM (PeerJS)
+// ==========================================
+function generateRoomCode() {
+    return Math.floor(1000 + Math.random() * 9000).toString();
+}
+
+window.initHostLobby = function() {
+    isHost = true;
+    roomCode = generateRoomCode();
+    let fullPeerId = "racing-league-" + roomCode;
+
+    document.getElementById("display-room-code").innerText = roomCode;
+    showHostGrid();
+
+    if (peer) peer.destroy();
+    peer = new Peer(fullPeerId);
+
+    peer.on('open', id => {
+        console.log("Host Room Active Code:", roomCode);
+    });
+
+    peer.on('connection', conn => {
+        conn.on('open', () => {
+            connections[conn.peer] = conn;
+            updateHostPlayerCount();
+
+            // Send current host room settings to joining guest
+            conn.send({
+                type: 'LOBBY_CONFIG',
+                trackKey: selectedTrackKey,
+                topSpeed: hostTopSpeed,
+                laps: hostTotalLaps,
+                boosterDensity: hostBoosterDensity,
+                roomCode: roomCode
+            });
+        });
+
+        conn.on('data', data => handleIncomingData(data, conn.peer));
+        conn.on('close', () => {
+            delete connections[conn.peer];
+            removeRemotePlayer(conn.peer);
+            updateHostPlayerCount();
+        });
+    });
+};
+
+function updateHostPlayerCount() {
+    let count = Object.keys(connections).length + 1;
+    let countEl = document.getElementById("host-player-count");
+    if (countEl) countEl.innerText = count;
+}
+
+window.joinLobby = function() {
+    let inputCode = document.getElementById("roomCodeInput").value.trim();
+    let statusEl = document.getElementById("join-status");
+
+    if (inputCode.length !== 4) {
+        statusEl.innerText = "Please enter a 4-digit code!";
+        return;
+    }
+
+    statusEl.innerText = "CONNECTING...";
+    isHost = false;
+    roomCode = inputCode;
+
+    if (peer) peer.destroy();
+    peer = new Peer();
+
+    peer.on('open', () => {
+        let hostPeerId = "racing-league-" + roomCode;
+        hostConn = peer.connect(hostPeerId);
+
+        hostConn.on('open', () => {
+            statusEl.innerText = "CONNECTED! WAITING FOR HOST...";
+        });
+
+        hostConn.on('data', data => {
+            if (data.type === 'LOBBY_CONFIG') {
+                selectedTrackKey = data.trackKey;
+                hostTopSpeed = data.topSpeed;
+                hostTotalLaps = data.laps;
+                hostBoosterDensity = data.boosterDensity;
+            } else if (data.type === 'START_RACE') {
+                startRace(data.trackKey, false);
+            } else {
+                handleIncomingData(data, 'host');
+            }
+        });
+
+        hostConn.on('close', () => {
+            alert("Host disconnected!");
+            showMainMenu();
+        });
+    });
+
+    peer.on('error', err => {
+        statusEl.innerText = "ROOM NOT FOUND!";
+    });
+};
+
+function broadcast(data) {
+    if (isHost) {
+        Object.values(connections).forEach(conn => conn.send(data));
+    } else if (hostConn && hostConn.open) {
+        hostConn.send(data);
+    }
+}
+
+function handleIncomingData(data, senderId) {
+    if (data.type === 'PLAYER_TRANSFORM') {
+        updateRemotePlayer(senderId, data);
+
+        // Host relays guest movements to all other guests
+        if (isHost) {
+            Object.keys(connections).forEach(cId => {
+                if (cId !== senderId) connections[cId].send(data);
+            });
+        }
+    }
+}
+
+// ==========================================
+// 3. HOST SETTINGS UI
+// ==========================================
 window.openHostSettings = function(trackKey) {
     selectedTrackKey = trackKey;
     hideAllScreens();
@@ -82,12 +216,14 @@ window.setBoosterDensity = function(density, btn) {
 window.confirmHostStart = function() {
     let speedInput = document.getElementById("setting-speed");
     if (speedInput) hostTopSpeed = parseFloat(speedInput.value);
-    startRace(selectedTrackKey);
+
+    broadcast({ type: 'START_RACE', trackKey: selectedTrackKey });
+    startRace(selectedTrackKey, true);
 };
 
 window.setCarModel = function(model, btn) {
     carModel = model;
-    document.querySelectorAll('.opt-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('#garage-menu .opt-btn').forEach(b => b.classList.remove('active'));
     if (btn) btn.classList.add('active');
 };
 
@@ -98,7 +234,7 @@ window.setCarColor = function(color, swatch) {
 };
 
 // ==========================================
-// 2. ENGINE & SCENE
+// 4. THREE.JS ENGINE & RENDERING
 // ==========================================
 let scene, camera, renderer, car;
 let boosters = [], jumps = [];
@@ -141,37 +277,60 @@ function initEngine() {
     animate();
 }
 
-function buildCustomCar() {
-    if (car) scene.remove(car);
-    car = new THREE.Group();
-
-    let bodyMat = new THREE.MeshLambertMaterial({ color: carColorHex });
+function buildCarMesh(model, color) {
+    let carGroup = new THREE.Group();
+    let bodyMat = new THREE.MeshLambertMaterial({ color: color });
     let cabinMat = new THREE.MeshLambertMaterial({ color: 0x111111 });
 
-    if (carModel === 'truck') {
+    if (model === 'truck') {
         let body = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.8, 2.6), bodyMat);
         body.position.y = 0.5;
         let cabin = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.7, 1.2), cabinMat);
         cabin.position.set(0, 1.1, -0.2);
-        car.add(body, cabin);
-    } else if (carModel === 'cyber') {
+        carGroup.add(body, cabin);
+    } else if (model === 'cyber') {
         let body = new THREE.Mesh(new THREE.ConeGeometry(1.3, 2.8, 4), bodyMat);
         body.rotation.x = Math.PI / 2;
         body.position.y = 0.4;
-        car.add(body);
+        carGroup.add(body);
     } else {
         let body = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.4, 2.5), bodyMat);
         body.position.y = 0.3;
         let cabin = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.4, 1.1), cabinMat);
         cabin.position.set(0, 0.6, -0.2);
-        car.add(body, cabin);
+        carGroup.add(body, cabin);
     }
+    return carGroup;
+}
 
+function buildCustomCar() {
+    if (car) scene.remove(car);
+    car = buildCarMesh(carModel, carColorHex);
     scene.add(car);
 }
 
+// Multi-car rendering for other players
+function updateRemotePlayer(id, data) {
+    if (!remotePlayers[id]) {
+        let rCar = buildCarMesh(data.model || 'sport', data.color || 0x0088ff);
+        scene.add(rCar);
+        remotePlayers[id] = rCar;
+    }
+
+    let p = remotePlayers[id];
+    p.position.set(data.x, data.y, data.z);
+    p.rotation.y = data.rot;
+}
+
+function removeRemotePlayer(id) {
+    if (remotePlayers[id]) {
+        scene.remove(remotePlayers[id]);
+        delete remotePlayers[id];
+    }
+}
+
 // ==========================================
-// 3. TRACK & PROP BUILDER
+// 5. TRACK & PROP BUILDER
 // ==========================================
 function clearObjects() {
     if (trackMesh) scene.remove(trackMesh);
@@ -223,22 +382,25 @@ function createBoosterPad(x, z) {
 function createRampJump(x, z, angle) {
     let ramp = new THREE.Mesh(new THREE.BoxGeometry(6, 1.2, 6), new THREE.MeshLambertMaterial({ color: 0xff3300 }));
     ramp.position.set(x, 0.4, z);
-    ramp.rotation.y = angle;
-    ramp.rotation.x = -Math.PI / 12; // Direction-aligned incline
+    ramp.rotation.y = angle; // Aligns ramp direction with the track
+    ramp.rotation.x = -Math.PI / 12;
     scene.add(ramp);
     jumps.push({ mesh: ramp, x: x, z: z });
 }
 
 // ==========================================
-// 4. GAME CONTROLLERS
+// 6. GAME CONTROLLERS & TRACK EDITOR
 // ==========================================
-window.startRace = function(trackKey) {
+window.startRace = function(trackKey, hostInitiated) {
     initEngine();
     hideAllScreens();
-    
+
     let hud = document.getElementById("game-hud");
     if (hud) hud.classList.remove("hidden");
-    
+
+    let roomHud = document.getElementById("hud-room-code");
+    if (roomHud) roomHud.innerText = roomCode ? roomCode : "SINGLE";
+
     isEditorMode = false;
     nitroLevel = 100;
     currentLap = 1;
@@ -332,7 +494,7 @@ function getClosestTrackPoint(pos) {
 }
 
 // ==========================================
-// 5. GAME LOOP & PHYSICS
+// 7. PHYSICS & GAME LOOP
 // ==========================================
 function animate() {
     requestAnimationFrame(animate);
@@ -366,20 +528,19 @@ function animate() {
     let nextX = car.position.x + Math.sin(rot) * speed;
     let nextZ = car.position.z + Math.cos(rot) * speed;
 
-    // Bouncing Invisible Walls
+    // Bouncing Invisible Walls (Keeps Speed On Bounce)
     if (currentCurve && !isEditorMode) {
         let trackInfo = getClosestTrackPoint({ x: nextX, z: nextZ });
 
         if (trackInfo.distance > BARRIER_RADIUS) {
-            // Calculate normal vector pushing inwards from wall
             let nx = (car.position.x - trackInfo.point.x) / trackInfo.distance;
             let nz = (car.position.z - trackInfo.point.z) / trackInfo.distance;
 
-            // Reflect position outwards to keep car inside track
+            // Deflect outwards from wall
             nextX = trackInfo.point.x + nx * BARRIER_RADIUS;
             nextZ = trackInfo.point.z + nz * BARRIER_RADIUS;
 
-            // Deflect orientation without sacrificing car velocity
+            // Smoothly bounce car direction while keeping full momentum
             rot += Math.atan2(nx, nz) * 0.15;
         }
 
@@ -428,6 +589,19 @@ function animate() {
     camera.position.z = car.position.z - Math.cos(rot) * 12;
     camera.position.y = car.position.y + 6;
     camera.lookAt(car.position.x, car.position.y + 0.5, car.position.z);
+
+    // Broadcast Position Data to Peer Network
+    if (!isEditorMode) {
+        broadcast({
+            type: 'PLAYER_TRANSFORM',
+            x: car.position.x,
+            y: car.position.y,
+            z: car.position.z,
+            rot: car.rotation.y,
+            model: carModel,
+            color: carColorHex
+        });
+    }
 
     let speedDisplay = document.getElementById("hud-speed");
     if (speedDisplay) speedDisplay.innerText = `${Math.round(Math.abs(speed * 200))} KM/H`;
