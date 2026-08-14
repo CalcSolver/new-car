@@ -3,205 +3,968 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D Racing League</title>
-    
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
-    
+    <title>3D Multiplayer WebRTC Racing</title>
     <!-- Three.js Library -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <!-- Free WebRTC Networking Library -->
+    <!-- PeerJS Library for WebRTC -->
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
-    
-    <link rel="stylesheet" href="style.css">
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body, html {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #000;
+            color: #fff;
+        }
+
+        canvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        /* UI Overlays */
+        .overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: rgba(15, 15, 25, 0.85);
+            z-index: 10;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        .card {
+            background: #1e1e2e;
+            padding: 2rem;
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+            border: 1px solid #33334d;
+            text-align: center;
+            min-width: 320px;
+            max-width: 90%;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 1.5rem;
+            color: #00ffff;
+            text-shadow: 0 0 10px rgba(0, 255, 255, 0.5);
+        }
+
+        h2 {
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+            color: #ff0055;
+        }
+
+        .btn-group {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            width: 100%;
+            margin-top: 1rem;
+        }
+
+        .btn {
+            background: #2a2a40;
+            color: #fff;
+            border: 2px solid #00ffff;
+            padding: 12px 20px;
+            font-size: 1rem;
+            font-weight: bold;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .btn:hover {
+            background: #00ffff;
+            color: #000;
+            box-shadow: 0 0 15px rgba(0, 255, 255, 0.6);
+        }
+
+        .btn-secondary {
+            border-color: #ff0055;
+        }
+
+        .btn-secondary:hover {
+            background: #ff0055;
+            color: #fff;
+            box-shadow: 0 0 15px rgba(255, 0, 85, 0.6);
+        }
+
+        .opt-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin: 1rem 0;
+        }
+
+        .opt-btn {
+            background: #151520;
+            border: 1px solid #444;
+            color: #ccc;
+            padding: 8px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .opt-btn.active {
+            border-color: #00ffff;
+            color: #00ffff;
+            background: rgba(0, 255, 255, 0.1);
+        }
+
+        .color-picker {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin: 1rem 0;
+        }
+
+        .color-swatch {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            cursor: pointer;
+            border: 2px solid transparent;
+        }
+
+        .color-swatch.active {
+            border-color: #fff;
+            transform: scale(1.1);
+        }
+
+        input[type="text"], input[type="number"] {
+            width: 100%;
+            padding: 10px;
+            background: #111118;
+            border: 1px solid #444;
+            color: #fff;
+            border-radius: 4px;
+            text-align: center;
+            font-size: 1.2rem;
+            margin-bottom: 1rem;
+        }
+
+        /* HUD Overlay */
+        #game-hud {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .hud-top {
+            display: flex;
+            justify-content: space-between;
+            font-size: 1.5rem;
+            font-weight: bold;
+            text-shadow: 2px 2px 4px #000;
+        }
+
+        .hud-bottom {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 10px;
+        }
+
+        .speedometer {
+            font-size: 2.5rem;
+            font-weight: bold;
+            color: #00ffff;
+            text-shadow: 0 0 10px rgba(0,255,255,0.8);
+        }
+
+        .nitro-bar-container {
+            width: 200px;
+            height: 16px;
+            background: rgba(0,0,0,0.6);
+            border: 2px solid #ff0055;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .nitro-bar-fill {
+            width: 100%;
+            height: 100%;
+            background: #ff0055;
+            box-shadow: 0 0 10px #ff0055;
+            transition: width 0.1s linear;
+        }
+
+        /* Editor UI */
+        #editor-ui {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 10px;
+            background: rgba(0,0,0,0.7);
+            padding: 10px;
+            border-radius: 8px;
+        }
+    </style>
 </head>
 <body>
 
-    <!-- Main Front Menu -->
+    <!-- Main Menu -->
     <div id="main-menu" class="overlay">
-        <h1 class="game-title">3D RACING LEAGUE</h1>
-        
-        <div class="input-group">
-            <label>DRIVER NAME</label>
-            <input id="playerName" type="text" placeholder="Enter Name" value="Racer1" maxlength="12" />
-        </div>
-
-        <div class="menu-actions">
-            <button class="btn btn-green" onclick="initHostLobby()">HOST GAME 🏁</button>
-            <button class="btn btn-purple" onclick="showGarage()">GARAGE 🚘</button>
-            <button class="btn btn-blue" onclick="showJoinMenu()">JOIN GAME 🌐</button>
+        <div class="card">
+            <h1>TURBO LEAGUE</h1>
+            <div class="btn-group">
+                <button class="btn" onclick="showGarage()">Garage & Customization</button>
+                <button class="btn" onclick="openHostSettings('oval')">Host Match</button>
+                <button class="btn" onclick="showJoinMenu()">Join Match</button>
+                <button class="btn btn-secondary" onclick="launchTrackEditor()">Track Editor</button>
+            </div>
         </div>
     </div>
 
-    <!-- Garage Screen -->
+    <!-- Garage -->
     <div id="garage-menu" class="overlay hidden">
-        <h2 class="section-title">GARAGE</h2>
-        
-        <div class="garage-container">
-            <div class="garage-option">
-                <label>CAR MODEL</label>
-                <div class="button-row">
-                    <button class="opt-btn active" onclick="setCarModel('sport', this)">🏎️ Sport</button>
-                    <button class="opt-btn" onclick="setCarModel('truck', this)">🛻 Truck</button>
-                    <button class="opt-btn" onclick="setCarModel('cyber', this)">🚀 Cyber</button>
-                </div>
+        <div class="card">
+            <h2>GARAGE</h2>
+            <p>Select Vehicle Class</p>
+            <div class="opt-grid">
+                <button class="opt-btn active" onclick="setCarModel('sport', this)">Sport</button>
+                <button class="opt-btn" onclick="setCarModel('truck', this)">Truck</button>
+                <button class="opt-btn" onclick="setCarModel('cyber', this)">Cyber</button>
             </div>
-
-            <div class="garage-option">
-                <label>PAINT COLOR</label>
-                <div class="color-picker">
-                    <div class="color-swatch active" style="background: #ff0055;" onclick="setCarColor(0xff0055, this)"></div>
-                    <div class="color-swatch" style="background: #0088ff;" onclick="setCarColor(0x0088ff, this)"></div>
-                    <div class="color-swatch" style="background: #ffcc00;" onclick="setCarColor(0xffcc00, this)"></div>
-                    <div class="color-swatch" style="background: #00cc66;" onclick="setCarColor(0x00cc66, this)"></div>
-                    <div class="color-swatch" style="background: #aa00ff;" onclick="setCarColor(0xaa00ff, this)"></div>
-                </div>
+            <p>Select Paint Color</p>
+            <div class="color-picker">
+                <div class="color-swatch active" style="background: #ff0055;" onclick="setCarColor(0xff0055, this)"></div>
+                <div class="color-swatch" style="background: #00ffff;" onclick="setCarColor(0x00ffff, this)"></div>
+                <div class="color-swatch" style="background: #ffaa00;" onclick="setCarColor(0xffaa00, this)"></div>
+                <div class="color-swatch" style="background: #00ff66;" onclick="setCarColor(0x00ff66, this)"></div>
+                <div class="color-swatch" style="background: #9900ff;" onclick="setCarColor(0x9900ff, this)"></div>
             </div>
-        </div>
-
-        <button class="btn btn-red" onclick="showMainMenu()">SAVE & EXIT</button>
-    </div>
-
-    <!-- Host Grid Selection Modal -->
-    <div id="host-modal" class="overlay hidden">
-        <div class="modal-header">
-            <h2>SELECT MAP</h2>
-            <button class="btn-close" onclick="showMainMenu()">✕</button>
-        </div>
-        
-        <div class="map-grid">
-            <div class="map-card" onclick="openHostSettings('oval')">
-                <div class="map-preview oval-bg"></div>
-                <div class="map-info">
-                    <h3>SPEEDWAY OVAL</h3>
-                    <p>Easy / Wide Curves</p>
-                </div>
-            </div>
-
-            <div class="map-card" onclick="openHostSettings('twisty')">
-                <div class="map-preview twisty-bg"></div>
-                <div class="map-info">
-                    <h3>TWISTY MOUNTAIN</h3>
-                    <p>Sharp Bends & Jumps</p>
-                </div>
-            </div>
-
-            <div class="map-card" onclick="openHostSettings('stunt')">
-                <div class="map-preview stunt-bg"></div>
-                <div class="map-info">
-                    <h3>STUNT ARENA</h3>
-                    <p>Huge Ramp Jumps & Boosts</p>
-                </div>
-            </div>
-
-            <div class="map-card" onclick="openHostSettings('custom')">
-                <div class="map-preview custom-bg"></div>
-                <div class="map-info">
-                    <h3>CUSTOM TRACK</h3>
-                    <p>User Created Track</p>
-                </div>
-            </div>
-
-            <div class="map-card editor-card" onclick="launchTrackEditor()">
-                <div class="map-preview editor-bg">
-                    <span class="editor-icon">🛠️</span>
-                </div>
-                <div class="map-info">
-                    <h3>TRACK EDITOR</h3>
-                    <p>Build & Save Custom Maps</p>
-                </div>
-            </div>
+            <button class="btn" onclick="showMainMenu()">Back to Menu</button>
         </div>
     </div>
 
-    <!-- Host Settings Modal -->
+    <!-- Host Lobby Setup -->
     <div id="settings-modal" class="overlay hidden">
-        <h2 class="section-title">HOST LOBBY SETTINGS</h2>
-        
-        <div class="room-code-box">
-            ROOM CODE: <span id="display-room-code" class="highlight-yellow">GENERATING...</span>
-        </div>
-
-        <div class="garage-container">
-            <div class="garage-option">
-                <label>TOP SPEED</label>
-                <input id="setting-speed" type="range" min="0.3" max="1.2" step="0.05" value="0.5" />
+        <div class="card">
+            <h2>HOST CONFIGURATION</h2>
+            <p>Total Laps</p>
+            <div class="opt-grid">
+                <button class="opt-btn active" onclick="setLaps(3, this)">3 Laps</button>
+                <button class="opt-btn" onclick="setLaps(5, this)">5 Laps</button>
+                <button class="opt-btn" onclick="setLaps(10, this)">10 Laps</button>
             </div>
-
-            <div class="garage-option">
-                <label>TOTAL LAPS</label>
-                <div class="button-row">
-                    <button class="opt-btn active" onclick="setLaps(3, this)">3 Laps</button>
-                    <button class="opt-btn" onclick="setLaps(5, this)">5 Laps</button>
-                    <button class="opt-btn" onclick="setLaps(10, this)">10 Laps</button>
-                </div>
+            <p>Booster Density</p>
+            <div class="opt-grid">
+                <button class="opt-btn" onclick="setBoosterDensity('low', this)">Low</button>
+                <button class="opt-btn active" onclick="setBoosterDensity('medium', this)">Medium</button>
+                <button class="opt-btn" onclick="setBoosterDensity('high', this)">High</button>
             </div>
-
-            <div class="garage-option">
-                <label>BOOSTER DENSITY</label>
-                <div class="button-row">
-                    <button class="opt-btn" onclick="setBoosterDensity('low', this)">Low</button>
-                    <button class="opt-btn active" onclick="setBoosterDensity('medium', this)">Medium</button>
-                    <button class="opt-btn" onclick="setBoosterDensity('high', this)">High</button>
-                </div>
+            <p>Top Speed Modifier</p>
+            <input type="number" id="setting-speed" value="0.5" step="0.1" min="0.2" max="1.0">
+            <div class="btn-group">
+                <button class="btn" onclick="initHostLobby()">Create Room</button>
+                <button class="btn btn-secondary" onclick="showMainMenu()">Cancel</button>
             </div>
         </div>
+    </div>
 
-        <div class="player-count-indicator">
-            CONNECTED PLAYERS: <span id="host-player-count">1</span>
-        </div>
-
-        <div class="menu-actions">
-            <button class="btn btn-green" onclick="confirmHostStart()">START RACE 🏁</button>
-            <button class="btn btn-red" onclick="showHostGrid()">BACK</button>
+    <!-- Host Grid Screen -->
+    <div id="host-modal" class="overlay hidden">
+        <div class="card">
+            <h2>LOBBY CREATED</h2>
+            <p>Share this Room Code with friends:</p>
+            <h1 id="display-room-code" style="font-size: 3.5rem; letter-spacing: 4px; margin: 10px 0;">----</h1>
+            <p>Players Connected: <span id="host-player-count">1</span></p>
+            <div class="btn-group" style="margin-top: 20px;">
+                <button class="btn" onclick="confirmHostStart()">Start Race</button>
+                <button class="btn btn-secondary" onclick="showMainMenu()">Cancel</button>
+            </div>
         </div>
     </div>
 
     <!-- Join Menu -->
     <div id="join-menu" class="overlay hidden">
-        <h2 class="section-title">JOIN LOBBY</h2>
-        <div class="input-group">
-            <label>ENTER 4-DIGIT ROOM CODE</label>
-            <input id="roomCodeInput" type="text" placeholder="e.g. 4921" maxlength="4" />
+        <div class="card">
+            <h2>JOIN ROOM</h2>
+            <input type="text" id="roomCodeInput" maxlength="4" placeholder="ENTER 4-DIGIT CODE">
+            <p id="join-status" style="color: #ffaa00; margin-bottom: 10px;"></p>
+            <div class="btn-group">
+                <button class="btn" onclick="joinLobby()">Connect</button>
+                <button class="btn btn-secondary" onclick="showMainMenu()">Back</button>
+            </div>
         </div>
-        <div class="menu-actions">
-            <button class="btn btn-blue" onclick="joinLobby()">CONNECT 🔗</button>
-            <button class="btn btn-red" onclick="showMainMenu()">BACK</button>
-        </div>
-        <div id="join-status" class="status-msg"></div>
     </div>
 
-    <!-- In-Game HUD -->
+    <!-- Game HUD -->
     <div id="game-hud" class="hidden">
-        <div class="hud-box">
-            <div class="hud-item">ROOM: <span id="hud-room-code" class="highlight-cyan">SINGLE</span></div>
-            <div class="hud-item">LAP: <span id="hud-lap" class="highlight-yellow">1 / 3</span></div>
-            <div class="hud-item">SPEED: <span id="hud-speed" class="highlight-yellow">0 KM/H</span></div>
-            <div class="hud-item">
-                NITRO: 
-                <div class="nitro-bar-container">
-                    <div id="nitro-bar-fill"></div>
-                </div>
+        <div class="hud-top">
+            <div>LAP: <span id="hud-lap">1 / 3</span></div>
+            <div>ROOM: <span id="hud-room-code">OFFLINE</span></div>
+        </div>
+        <div class="hud-bottom">
+            <div class="speedometer" id="hud-speed">0 KM/H</div>
+            <div class="nitro-bar-container">
+                <div class="nitro-bar-fill" id="nitro-bar-fill"></div>
             </div>
         </div>
-        <div class="hud-controls-hint">[A/D] STEER | [W] ACCEL | [SPACE] NITRO</div>
     </div>
 
-    <!-- Track Editor Interface -->
+    <!-- Editor UI Overlay -->
     <div id="editor-ui" class="hidden">
-        <div class="editor-bar">
-            <span class="editor-title">TRACK EDITOR</span>
-            <div class="editor-buttons">
-                <button class="btn btn-sm btn-green" onclick="addTrackNode()">+ Add Node</button>
-                <button class="btn btn-sm btn-purple" onclick="addCustomBooster()">+ Add Booster</button>
-                <button class="btn btn-sm btn-orange" onclick="addCustomRamp()">+ Add Ramp</button>
-                <button class="btn btn-sm btn-blue" onclick="saveCustomTrack()">Save Track</button>
-                <button class="btn btn-sm btn-red" onclick="exitEditor()">Exit</button>
-            </div>
-        </div>
+        <button class="btn" onclick="addTrackNode()">Add Waypoint</button>
+        <button class="btn" onclick="addCustomBooster()">Add Booster</button>
+        <button class="btn" onclick="addCustomRamp()">Add Ramp</button>
+        <button class="btn" onclick="saveCustomTrack()">Save Track</button>
+        <button class="btn btn-secondary" onclick="exitEditor()">Exit</button>
     </div>
 
-    <script src="game.js"></script>
+    <script>
+        // ==========================================
+        // 1. CONFIGURATION & STATE
+        // ==========================================
+        const TRACK_WIDTH = 16;
+        const BARRIER_RADIUS = TRACK_WIDTH / 2 - 1.5;
+
+        const PRESET_TRACKS = {
+            oval: [
+                {x: -60, z: -100}, {x: 60, z: -100}, {x: 100, z: -50}, 
+                {x: 100, z: 50}, {x: 60, z: 100}, {x: -60, z: 100}, 
+                {x: -100, z: 50}, {x: -100, z: -50}
+            ]
+        };
+
+        let customTrackNodes = JSON.parse(localStorage.getItem("customTrackNodes")) || [
+            {x: -50, z: -50}, {x: 50, z: -50}, {x: 50, z: 50}, {x: -50, z: 50}
+        ];
+        let customProps = JSON.parse(localStorage.getItem("customProps")) || [];
+
+        let currentTrackPoints = [];
+        let currentCurve = null;
+
+        let carModel = 'sport';
+        let carColorHex = 0xff0055;
+
+        let selectedTrackKey = 'oval';
+        let hostTopSpeed = 0.5;
+        let hostTotalLaps = 3;
+        let hostBoosterDensity = 'medium';
+
+        let currentLap = 1;
+        let passedCheckpoint = false;
+
+        let nitroLevel = 100;
+        const MAX_NITRO = 100;
+        const NITRO_DRAIN = 0.8;
+        const NITRO_RECHARGE = 0.25;
+
+        // Networking
+        let peer = null;
+        let roomCode = null;
+        let isHost = false;
+        let connections = {};
+        let hostConn = null;
+        let remotePlayers = {}; 
+        let lastNetworkSend = 0;
+        const NETWORK_SEND_RATE = 50; // 20 FPS network sync
+
+        // Screen Navigation
+        function showMainMenu() { hideAllScreens(); document.getElementById("main-menu").classList.remove("hidden"); }
+        function showGarage() { hideAllScreens(); document.getElementById("garage-menu").classList.remove("hidden"); }
+        function showHostGrid() { hideAllScreens(); document.getElementById("host-modal").classList.remove("hidden"); }
+        function showJoinMenu() { hideAllScreens(); document.getElementById("join-menu").classList.remove("hidden"); }
+
+        function hideAllScreens() {
+            ['main-menu', 'garage-menu', 'host-modal', 'settings-modal', 'join-menu', 'game-hud', 'editor-ui'].forEach(id => {
+                let el = document.getElementById(id);
+                if (el) el.classList.add("hidden");
+            });
+        }
+
+        // ==========================================
+        // 2. WEBRTC MULTIPLAYER SYSTEM
+        // ==========================================
+        function generateRoomCode() {
+            return Math.floor(1000 + Math.random() * 9000).toString();
+        }
+
+        function initHostLobby() {
+            isHost = true;
+            roomCode = generateRoomCode();
+            let fullPeerId = "racing-league-" + roomCode;
+
+            document.getElementById("display-room-code").innerText = roomCode;
+            showHostGrid();
+
+            if (peer) peer.destroy();
+            peer = new Peer(fullPeerId);
+
+            peer.on('connection', conn => {
+                conn.on('open', () => {
+                    connections[conn.peer] = conn;
+                    updateHostPlayerCount();
+
+                    conn.send({
+                        type: 'LOBBY_CONFIG',
+                        trackKey: selectedTrackKey,
+                        topSpeed: hostTopSpeed,
+                        laps: hostTotalLaps,
+                        boosterDensity: hostBoosterDensity,
+                        roomCode: roomCode
+                    });
+                });
+
+                conn.on('data', data => handleIncomingData(data, conn.peer));
+                conn.on('close', () => {
+                    delete connections[conn.peer];
+                    removeRemotePlayer(conn.peer);
+                    updateHostPlayerCount();
+                });
+            });
+        }
+
+        function updateHostPlayerCount() {
+            let count = Object.keys(connections).length + 1;
+            let countEl = document.getElementById("host-player-count");
+            if (countEl) countEl.innerText = count;
+        }
+
+        function joinLobby() {
+            let inputCode = document.getElementById("roomCodeInput").value.trim();
+            let statusEl = document.getElementById("join-status");
+
+            if (inputCode.length !== 4) {
+                statusEl.innerText = "Please enter a 4-digit code!";
+                return;
+            }
+
+            statusEl.innerText = "CONNECTING...";
+            isHost = false;
+            roomCode = inputCode;
+
+            if (peer) peer.destroy();
+            peer = new Peer();
+
+            peer.on('open', () => {
+                let hostPeerId = "racing-league-" + roomCode;
+                hostConn = peer.connect(hostPeerId);
+
+                hostConn.on('open', () => {
+                    statusEl.innerText = "CONNECTED! WAITING FOR HOST...";
+                });
+
+                hostConn.on('data', data => {
+                    if (data.type === 'LOBBY_CONFIG') {
+                        selectedTrackKey = data.trackKey;
+                        hostTopSpeed = data.topSpeed;
+                        hostTotalLaps = data.laps;
+                        hostBoosterDensity = data.boosterDensity;
+                    } else if (data.type === 'START_RACE') {
+                        startRace(data.trackKey, false);
+                    } else {
+                        handleIncomingData(data, 'host');
+                    }
+                });
+
+                hostConn.on('close', () => {
+                    alert("Host disconnected!");
+                    showMainMenu();
+                });
+            });
+
+            peer.on('error', err => {
+                statusEl.innerText = "ROOM NOT FOUND!";
+            });
+        }
+
+        function broadcast(data) {
+            if (isHost) {
+                Object.values(connections).forEach(conn => conn.send(data));
+            } else if (hostConn && hostConn.open) {
+                hostConn.send(data);
+            }
+        }
+
+        function handleIncomingData(data, senderId) {
+            if (data.type === 'PLAYER_TRANSFORM') {
+                updateRemotePlayerTarget(senderId, data);
+
+                if (isHost) {
+                    Object.keys(connections).forEach(cId => {
+                        if (cId !== senderId) connections[cId].send(data);
+                    });
+                }
+            }
+        }
+
+        function openHostSettings(trackKey) {
+            selectedTrackKey = trackKey;
+            hideAllScreens();
+            document.getElementById("settings-modal").classList.remove("hidden");
+        }
+
+        function setLaps(laps, btn) {
+            hostTotalLaps = laps;
+            btn.parentNode.querySelectorAll('.opt-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+        }
+
+        function setBoosterDensity(density, btn) {
+            hostBoosterDensity = density;
+            btn.parentNode.querySelectorAll('.opt-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+        }
+
+        function confirmHostStart() {
+            let speedInput = document.getElementById("setting-speed");
+            if (speedInput) hostTopSpeed = parseFloat(speedInput.value);
+
+            broadcast({ type: 'START_RACE', trackKey: selectedTrackKey });
+            startRace(selectedTrackKey, true);
+        }
+
+        function setCarModel(model, btn) {
+            carModel = model;
+            document.querySelectorAll('#garage-menu .opt-btn').forEach(b => b.classList.remove('active'));
+            if (btn) btn.classList.add('active');
+        }
+
+        function setCarColor(color, swatch) {
+            carColorHex = color;
+            document.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('active'));
+            if (swatch) swatch.classList.add('active');
+        }
+
+        // ==========================================
+        // 3. THREE.JS ENGINE & RENDERING
+        // ==========================================
+        let scene, camera, renderer, car;
+        let boosters = [], jumps = [];
+        let trackMesh = null;
+        let editorMarkers = [];
+
+        let speed = 0, rot = 0, verticalSpeed = 0, carY = 0;
+        let isGrounded = true;
+        let keys = {};
+        let isEditorMode = false;
+
+        function initEngine() {
+            if (renderer) return;
+
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x87ceeb);
+            scene.fog = new THREE.FogExp2(0x87ceeb, 0.002);
+
+            camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 1000);
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            document.body.appendChild(renderer.domElement);
+
+            scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+            let sun = new THREE.DirectionalLight(0xffffff, 0.8);
+            sun.position.set(100, 200, 100);
+            scene.add(sun);
+
+            let ground = new THREE.Mesh(
+                new THREE.PlaneGeometry(800, 800),
+                new THREE.MeshLambertMaterial({ color: 0x3b7a57 })
+            );
+            ground.rotation.x = -Math.PI / 2;
+            scene.add(ground);
+
+            window.addEventListener('keydown', e => keys[e.key] = true);
+            window.addEventListener('keyup', e => keys[e.key] = false);
+            window.addEventListener('resize', onResize);
+
+            animate();
+        }
+
+        function buildCarMesh(model, color) {
+            let carGroup = new THREE.Group();
+            let bodyMat = new THREE.MeshLambertMaterial({ color: color });
+            let cabinMat = new THREE.MeshLambertMaterial({ color: 0x111111 });
+
+            if (model === 'truck') {
+                let body = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.8, 2.6), bodyMat);
+                body.position.y = 0.5;
+                let cabin = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.7, 1.2), cabinMat);
+                cabin.position.set(0, 1.1, -0.2);
+                carGroup.add(body, cabin);
+            } else if (model === 'cyber') {
+                let body = new THREE.Mesh(new THREE.ConeGeometry(1.3, 2.8, 4), bodyMat);
+                body.rotation.x = Math.PI / 2;
+                body.position.y = 0.4;
+                carGroup.add(body);
+            } else {
+                let body = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.4, 2.5), bodyMat);
+                body.position.y = 0.3;
+                let cabin = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.4, 1.1), cabinMat);
+                cabin.position.set(0, 0.6, -0.2);
+                carGroup.add(body, cabin);
+            }
+            return carGroup;
+        }
+
+        function buildCustomCar() {
+            if (car) scene.remove(car);
+            car = buildCarMesh(carModel, carColorHex);
+            scene.add(car);
+        }
+
+        function updateRemotePlayerTarget(id, data) {
+            if (!remotePlayers[id]) {
+                let rCar = buildCarMesh(data.model || 'sport', data.color || 0x0088ff);
+                scene.add(rCar);
+                remotePlayers[id] = {
+                    mesh: rCar,
+                    targetX: data.x,
+                    targetY: data.y,
+                    targetZ: data.z,
+                    targetRot: data.rot
+                };
+            } else {
+                let p = remotePlayers[id];
+                p.targetX = data.x;
+                p.targetY = data.y;
+                p.targetZ = data.z;
+                p.targetRot = data.rot;
+            }
+        }
+
+        function updateRemotePlayersSmooth() {
+            Object.keys(remotePlayers).forEach(id => {
+                let p = remotePlayers[id];
+                p.mesh.position.x += (p.targetX - p.mesh.position.x) * 0.25;
+                p.mesh.position.y += (p.targetY - p.mesh.position.y) * 0.25;
+                p.mesh.position.z += (p.targetZ - p.mesh.position.z) * 0.25;
+
+                let diff = p.targetRot - p.mesh.rotation.y;
+                p.mesh.rotation.y += Math.atan2(Math.sin(diff), Math.cos(diff)) * 0.25;
+            });
+        }
+
+        function removeRemotePlayer(id) {
+            if (remotePlayers[id]) {
+                scene.remove(remotePlayers[id].mesh);
+                delete remotePlayers[id];
+            }
+        }
+
+        // ==========================================
+        // 4. TRACK & PROPS
+        // ==========================================
+        function clearObjects() {
+            if (trackMesh) scene.remove(trackMesh);
+            boosters.forEach(b => scene.remove(b.mesh));
+            jumps.forEach(j => scene.remove(j.mesh));
+            boosters = [];
+            jumps = [];
+        }
+
+        function buildTrack(points) {
+            clearObjects();
+            if (!points || points.length < 3) return;
+
+            let vectors = points.map(p => new THREE.Vector3(p.x, 0.1, p.z));
+            currentCurve = new THREE.CatmullRomCurve3(vectors, true);
+
+            let roadGeo = new THREE.TubeGeometry(currentCurve, 120, TRACK_WIDTH, 8, true);
+            let roadMat = new THREE.MeshLambertMaterial({ color: 0x222225 });
+            trackMesh = new THREE.Mesh(roadGeo, roadMat);
+            trackMesh.scale.y = 0.01;
+            scene.add(trackMesh);
+
+            if (selectedTrackKey === 'custom') {
+                customProps.forEach(p => {
+                    if (p.type === 'booster') createBoosterPad(p.x, p.z);
+                    if (p.type === 'ramp') createRampJump(p.x, p.z, 0);
+                });
+            } else {
+                let step = hostBoosterDensity === 'high' ? 2 : (hostBoosterDensity === 'medium' ? 3 : 5);
+                for (let i = 0; i < points.length; i++) {
+                    let p = points[i];
+                    let t = i / points.length;
+                    let tangent = currentCurve.getTangent(t);
+                    let angle = Math.atan2(tangent.x, tangent.z);
+
+                    if (i % step === 0) createBoosterPad(p.x, p.z);
+                    if (i % 4 === 0) createRampJump(p.x, p.z, angle);
+                }
+            }
+        }
+
+        function createBoosterPad(x, z) {
+            let pad = new THREE.Mesh(new THREE.BoxGeometry(4, 0.2, 4), new THREE.MeshBasicMaterial({ color: 0x00ffff }));
+            pad.position.set(x, 0.15, z);
+            scene.add(pad);
+            boosters.push({ mesh: pad, x: x, z: z });
+        }
+
+        function createRampJump(x, z, angle) {
+            let ramp = new THREE.Mesh(new THREE.BoxGeometry(6, 1.2, 6), new THREE.MeshLambertMaterial({ color: 0xff3300 }));
+            ramp.position.set(x, 0.4, z);
+            ramp.rotation.y = angle;
+            ramp.rotation.x = -Math.PI / 12;
+            scene.add(ramp);
+            jumps.push({ mesh: ramp, x: x, z: z });
+        }
+
+        // ==========================================
+        // 5. GAME LOOPS & CONTROLS
+        // ==========================================
+        function startRace(trackKey, hostInitiated) {
+            initEngine();
+            hideAllScreens();
+
+            let hud = document.getElementById("game-hud");
+            if (hud) hud.classList.remove("hidden");
+
+            let roomHud = document.getElementById("hud-room-code");
+            if (roomHud) roomHud.innerText = roomCode ? roomCode : "SINGLE";
+
+            isEditorMode = false;
+            nitroLevel = 100;
+            currentLap = 1;
+            passedCheckpoint = false;
+            updateLapHUD();
+
+            currentTrackPoints = (trackKey === 'custom') ? customTrackNodes : PRESET_TRACKS[trackKey] || PRESET_TRACKS.oval;
+            buildTrack(currentTrackPoints);
+            buildCustomCar();
+
+            car.position.set(currentTrackPoints[0].x, 0, currentTrackPoints[0].z);
+            speed = 0; rot = 0; carY = 0;
+        }
+
+        function launchTrackEditor() {
+            initEngine();
+            hideAllScreens();
+
+            let editorUI = document.getElementById("editor-ui");
+            if (editorUI) editorUI.classList.remove("hidden");
+            isEditorMode = true;
+            selectedTrackKey = 'custom';
+
+            currentTrackPoints = [...customTrackNodes];
+            updateEditor();
+        }
+
+        function updateEditor() {
+            editorMarkers.forEach(m => scene.remove(m));
+            editorMarkers = [];
+
+            currentTrackPoints.forEach(p => {
+                let marker = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 3), new THREE.MeshBasicMaterial({ color: 0xaa00ff }));
+                marker.position.set(p.x, 1.5, p.z);
+                scene.add(marker);
+                editorMarkers.push(marker);
+            });
+
+            buildTrack(currentTrackPoints);
+            buildCustomCar();
+        }
+
+        function addTrackNode() {
+            let nx = car.position.x + Math.sin(rot) * 15;
+            let nz = car.position.z + Math.cos(rot) * 15;
+            currentTrackPoints.push({ x: nx, z: nz });
+            updateEditor();
+        }
+
+        function addCustomBooster() {
+            customProps.push({ type: 'booster', x: car.position.x, z: car.position.z });
+            updateEditor();
+        }
+
+        function addCustomRamp() {
+            customProps.push({ type: 'ramp', x: car.position.x, z: car.position.z });
+            updateEditor();
+        }
+
+        function saveCustomTrack() {
+            customTrackNodes = [...currentTrackPoints];
+            localStorage.setItem("customTrackNodes", JSON.stringify(customTrackNodes));
+            localStorage.setItem("customProps", JSON.stringify(customProps));
+            alert("Custom Track Saved!");
+        }
+
+        function exitEditor() {
+            editorMarkers.forEach(m => scene.remove(m));
+            showMainMenu();
+        }
+
+        function updateLapHUD() {
+            let lapEl = document.getElementById("hud-lap");
+            if (lapEl) lapEl.innerText = `${currentLap} / ${hostTotalLaps}`;
+        }
+
+        function getClosestTrackPoint(pos) {
+            if (!currentCurve) return { point: pos, distance: 0 };
+            let minDistance = Infinity;
+            let closestPt = pos;
+
+            for (let u = 0; u <= 1; u += 0.01) {
+                let pt = currentCurve.getPoint(u);
+                let dist = Math.hypot(pt.x - pos.x, pt.z - pos.z);
+                if (dist < minDistance) {
+                    minDistance = dist;
+                    closestPt = pt;
+                }
+            }
+            return { point: closestPt, distance: minDistance };
+        }
+
+        // ==========================================
+        // 6. MAIN ANIMATION & PHYSICS LOOP
+        // ==========================================
+        function animate() {
+            requestAnimationFrame(animate);
+            if (!car) return;
+
+            // Nitro
+            let isNitroActive = false;
+            if ((keys[' '] || keys['Space']) && nitroLevel > 0) {
+                isNitroActive = true;
+                nitroLevel = Math.max(0, nitroLevel - NITRO_DRAIN);
+            } else {
+                nitroLevel = Math.min(MAX_NITRO, nitroLevel + NITRO_RECHARGE);
+            }
+
+            let nitroFill = document.getElementById("nitro-bar-fill");
+            if (nitroFill) nitroFill.style.width = `${nitroLevel}%`;
+
+            // Acceleration & Braking
+            let maxCap = isNitroActive ? hostTopSpeed * 1.6 : hostTopSpeed;
+            if (keys['w'] || keys['W'] || keys['ArrowUp']) speed = Math.min(speed + 0.012, maxCap);
+            else if (keys['s'] || keys['S'] || keys['ArrowDown']) speed = Math.max(speed - 0.015, -0.2);
+            else speed *= 0.98;
+
+            // Safe Steering Guard
+            if (Math.abs(speed) > 0.005) {
+                let turnDir = speed >= 0 ? 1 : -1;
+                if (keys['a'] || keys['A'] || keys['ArrowLeft']) rot += 0.03 * turnDir;
+                if (keys['d'] || keys['D'] || keys['ArrowRight']) rot -= 0.03 * turnDir;
+            }
+
+            let nextX = car.position.x + Math.sin(rot) * speed;
+            let nextZ = car.position.z + Math.cos(rot) * speed;
+
+            // Smooth Boundary Collisions
+            if (currentCurve && !isEditorMode) {
+                let trackInfo = getClosestTrackPoint({ x: nextX, z: nextZ });
+
+                if (trackInfo.distance > BARRIER_RADIUS) {
+                    let pushX = (nextX - trackInfo.point.x) / trackInfo.distance;
+                    let pushZ = (nextZ - trackInfo.point.z) / trackInfo.distance;
+
+                    nextX = trackInfo.point.x + pushX * BARRIER_RADIUS;
+                    nextZ = trackInfo.point.z + pushZ * BARRIER_RADIUS;
+
+                    speed *= 0.85; // Absorbs impact smoothly without spinning out
+                }
+
+                // Lap Counter Check
+                let startPoint = currentTrackPoints[0];
+                let distToStart = Math.hypot(car.position.x - startPoint.x, car.position.z - startPoint.z);
+                if (distToStart < 12 && passedCheckpoint) {
+                    currentLap++;
+                    passedCheckpoint = false;
+                    updateLapHUD();
+                    if (currentLap > hostTotalLaps) {
+                        alert("RACE FINISHED!");
+                        showMainMenu();
+                    }
+                } else if (distToStart > 40) {
+                    passedCheckpoint = true;
+                }
+            }
+
+            // Apply Safe Position & Orientation
+            car.position.x = nextX;
+            car.position.z = nextZ;
+            car.rotation.y = rot;
+
+            // Boost & Ramp Physics
+            boosters.forEach(b => {
+                if (Math.hypot(b.x - car.position.x, b.z - car.position.z) < 4) speed = hostTopSpeed * 1.8;
+            });
+
+            jumps.forEach(j => {
+                if (Math.hypot(j.x - car.position.x, j.z - car.position.z) < 4 && isGrounded) {
+                    verticalSpeed = 0.38;
+                    isGrounded = false;
+                }
+            });
+
+            if (!isGrounded) {
+                carY += verticalSpeed;
+                verticalSpeed -= 0.02;
+                if (carY <= 0) { carY = 0; isGrounded = true; }
+            }
+
+            car.position.y = carY;
+
+            // Remote Player Interpolation
+            updateRemotePlayersSmooth();
+
+            // Camera Tracking
+            camera.position.x = car.position.x - Math.sin(rot) * 12;
+            camera.position.z = car.position.z - Math.cos(rot) * 12;
+            camera.position.y = car.position.y + 6;
+            camera.lookAt(car.position.x, car.position.y + 0.5, car.position.z);
+
+            // Throttled Network Broadcast
+            let now = Date.now();
+            if (!isEditorMode && (now - lastNetworkSend > NETWORK_SEND_RATE)) {
+                lastNetworkSend = now;
+                broadcast({
+                    type: 'PLAYER_TRANSFORM',
+                    x: car.position.x,
+                    y: car.position.y,
+                    z: car.position.z,
+                    rot: car.rotation.y,
+                    model: carModel,
+                    color: carColorHex
+                });
+            }
+
+            // HUD Speed Update
+            let speedDisplay = document.getElementById("hud-speed");
+            if (speedDisplay) speedDisplay.innerText = `${Math.round(Math.abs(speed * 200))} KM/H`;
+
+            renderer.render(scene, camera);
+        }
+
+        function onResize() {
+            if (!camera || !renderer) return;
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+    </script>
 </body>
 </html>
