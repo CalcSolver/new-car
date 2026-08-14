@@ -68,7 +68,7 @@ canvas {
     color: #aaa;
 }
 
-input {
+input[type="text"] {
     padding: 10px 15px;
     font-family: inherit;
     font-size: 10px;
@@ -79,6 +79,12 @@ input {
     border-radius: 6px;
     width: 240px;
     outline: none;
+}
+
+input[type="range"] {
+    width: 200px;
+    accent-color: var(--accent-orange);
+    cursor: pointer;
 }
 
 .menu-actions {
@@ -111,7 +117,6 @@ input {
     width: auto;
 }
 
-/* Garage UI */
 .garage-container {
     display: flex;
     flex-direction: column;
@@ -120,7 +125,7 @@ input {
     padding: 20px;
     border-radius: 8px;
     border: 2px solid var(--accent-purple);
-    width: 300px;
+    width: 320px;
 }
 
 .garage-option {
@@ -167,7 +172,6 @@ input {
     transform: scale(1.15);
 }
 
-/* Modal Host Grid */
 #host-modal {
     padding: 20px;
     justify-content: flex-start;
@@ -248,7 +252,6 @@ input {
 .highlight-yellow { color: #ffcc00; }
 .highlight-cyan { color: #00ffcc; }
 
-/* Nitro Bar Styling */
 .nitro-bar-container {
     width: 100px;
     height: 10px;
