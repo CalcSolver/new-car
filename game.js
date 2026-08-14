@@ -48,14 +48,15 @@ const MAX_NITRO = 100;
 const NITRO_DRAIN = 0.8;
 const NITRO_RECHARGE = 0.25;
 
-// Multiplayer Network State
+// Multiplayer Network State & Throttling
 let peer = null;
 let roomCode = null;
 let isHost = false;
-let connections = {}; // Host stores guest connections
-let hostConn = null;  // Guest stores host connection
-let remotePlayers = {}; // id -> Mesh object
-let myPlayerId = 'p_' + Math.floor(Math.random() * 8999 + 1000);
+let connections = {};
+let hostConn = null;
+let remotePlayers = {}; 
+let lastNetworkSend = 0;
+const NETWORK_SEND_RATE = 50; // Send updates every 50ms (20 FPS)
 
 // Global UI Nav
 window.showMainMenu = function() { hideAllScreens(); document.getElementById("main-menu").classList.remove("hidden"); };
@@ -88,16 +89,11 @@ window.initHostLobby = function() {
     if (peer) peer.destroy();
     peer = new Peer(fullPeerId);
 
-    peer.on('open', id => {
-        console.log("Host Room Active Code:", roomCode);
-    });
-
     peer.on('connection', conn => {
         conn.on('open', () => {
             connections[conn.peer] = conn;
             updateHostPlayerCount();
 
-            // Send current host room settings to joining guest
             conn.send({
                 type: 'LOBBY_CONFIG',
                 trackKey: selectedTrackKey,
@@ -181,9 +177,8 @@ function broadcast(data) {
 
 function handleIncomingData(data, senderId) {
     if (data.type === 'PLAYER_TRANSFORM') {
-        updateRemotePlayer(senderId, data);
+        updateRemotePlayerTarget(senderId, data);
 
-        // Host relays guest movements to all other guests
         if (isHost) {
             Object.keys(connections).forEach(cId => {
                 if (cId !== senderId) connections[cId].send(data);
@@ -193,7 +188,7 @@ function handleIncomingData(data, senderId) {
 }
 
 // ==========================================
-// 3. HOST SETTINGS UI
+// 3. HOST SETTINGS & CAR SELECTION
 // ==========================================
 window.openHostSettings = function(trackKey) {
     selectedTrackKey = trackKey;
@@ -234,7 +229,7 @@ window.setCarColor = function(color, swatch) {
 };
 
 // ==========================================
-// 4. THREE.JS ENGINE & RENDERING
+// 4. THREE.JS ENGINE & SMOOTH MULTIPLAYER
 // ==========================================
 let scene, camera, renderer, car;
 let boosters = [], jumps = [];
@@ -309,22 +304,44 @@ function buildCustomCar() {
     scene.add(car);
 }
 
-// Multi-car rendering for other players
-function updateRemotePlayer(id, data) {
+// Stores target positions for smooth interpolation (Lerp)
+function updateRemotePlayerTarget(id, data) {
     if (!remotePlayers[id]) {
         let rCar = buildCarMesh(data.model || 'sport', data.color || 0x0088ff);
         scene.add(rCar);
-        remotePlayers[id] = rCar;
+        remotePlayers[id] = {
+            mesh: rCar,
+            targetX: data.x,
+            targetY: data.y,
+            targetZ: data.z,
+            targetRot: data.rot
+        };
+    } else {
+        let p = remotePlayers[id];
+        p.targetX = data.x;
+        p.targetY = data.y;
+        p.targetZ = data.z;
+        p.targetRot = data.rot;
     }
+}
 
-    let p = remotePlayers[id];
-    p.position.set(data.x, data.y, data.z);
-    p.rotation.y = data.rot;
+// Interpolates remote players smoothly each frame
+function updateRemotePlayersSmooth() {
+    Object.keys(remotePlayers).forEach(id => {
+        let p = remotePlayers[id];
+        p.mesh.position.x += (p.targetX - p.mesh.position.x) * 0.25;
+        p.mesh.position.y += (p.targetY - p.mesh.position.y) * 0.25;
+        p.mesh.position.z += (p.targetZ - p.mesh.position.z) * 0.25;
+
+        // Angle interpolation
+        let diff = p.targetRot - p.mesh.rotation.y;
+        p.mesh.rotation.y += Math.atan2(Math.sin(diff), Math.cos(diff)) * 0.25;
+    });
 }
 
 function removeRemotePlayer(id) {
     if (remotePlayers[id]) {
-        scene.remove(remotePlayers[id]);
+        scene.remove(remotePlayers[id].mesh);
         delete remotePlayers[id];
     }
 }
@@ -382,14 +399,14 @@ function createBoosterPad(x, z) {
 function createRampJump(x, z, angle) {
     let ramp = new THREE.Mesh(new THREE.BoxGeometry(6, 1.2, 6), new THREE.MeshLambertMaterial({ color: 0xff3300 }));
     ramp.position.set(x, 0.4, z);
-    ramp.rotation.y = angle; // Aligns ramp direction with the track
+    ramp.rotation.y = angle;
     ramp.rotation.x = -Math.PI / 12;
     scene.add(ramp);
     jumps.push({ mesh: ramp, x: x, z: z });
 }
 
 // ==========================================
-// 6. GAME CONTROLLERS & TRACK EDITOR
+// 6. GAME CONTROLLERS & EDITOR
 // ==========================================
 window.startRace = function(trackKey, hostInitiated) {
     initEngine();
@@ -494,13 +511,13 @@ function getClosestTrackPoint(pos) {
 }
 
 // ==========================================
-// 7. PHYSICS & GAME LOOP
+// 7. MAIN PHYSICS & GAME LOOP
 // ==========================================
 function animate() {
     requestAnimationFrame(animate);
     if (!car) return;
 
-    // Nitro Active Logic
+    // Nitro
     let isNitroActive = false;
     if ((keys[' '] || keys['Space']) && nitroLevel > 0) {
         isNitroActive = true;
@@ -528,7 +545,7 @@ function animate() {
     let nextX = car.position.x + Math.sin(rot) * speed;
     let nextZ = car.position.z + Math.cos(rot) * speed;
 
-    // Bouncing Invisible Walls (Keeps Speed On Bounce)
+    // Wall Bouncing
     if (currentCurve && !isEditorMode) {
         let trackInfo = getClosestTrackPoint({ x: nextX, z: nextZ });
 
@@ -536,15 +553,13 @@ function animate() {
             let nx = (car.position.x - trackInfo.point.x) / trackInfo.distance;
             let nz = (car.position.z - trackInfo.point.z) / trackInfo.distance;
 
-            // Deflect outwards from wall
             nextX = trackInfo.point.x + nx * BARRIER_RADIUS;
             nextZ = trackInfo.point.z + nz * BARRIER_RADIUS;
 
-            // Smoothly bounce car direction while keeping full momentum
             rot += Math.atan2(nx, nz) * 0.15;
         }
 
-        // Lap Counter Logic
+        // Laps
         let startPoint = currentTrackPoints[0];
         let distToStart = Math.hypot(car.position.x - startPoint.x, car.position.z - startPoint.z);
         if (distToStart < 12 && passedCheckpoint) {
@@ -584,14 +599,19 @@ function animate() {
     car.position.y = carY;
     car.rotation.y = rot;
 
+    // Smooth multiplayer rendering
+    updateRemotePlayersSmooth();
+
     // Camera
     camera.position.x = car.position.x - Math.sin(rot) * 12;
     camera.position.z = car.position.z - Math.cos(rot) * 12;
     camera.position.y = car.position.y + 6;
     camera.lookAt(car.position.x, car.position.y + 0.5, car.position.z);
 
-    // Broadcast Position Data to Peer Network
-    if (!isEditorMode) {
+    // Throttled Network Broadcast
+    let now = Date.now();
+    if (!isEditorMode && (now - lastNetworkSend > NETWORK_SEND_RATE)) {
+        lastNetworkSend = now;
         broadcast({
             type: 'PLAYER_TRANSFORM',
             x: car.position.x,
