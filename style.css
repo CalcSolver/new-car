@@ -38,12 +38,12 @@ canvas {
     position: absolute;
     top: 0; left: 0;
     width: 100%; height: 100%;
-    background: rgba(15, 15, 25, 0.94);
+    background: rgba(15, 15, 25, 0.95);
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 20px;
+    gap: 16px;
     z-index: 10;
 }
 
@@ -56,6 +56,26 @@ canvas {
 
 .section-title { font-size: 14px; color: #fff; }
 
+.room-code-box {
+    background: #000;
+    border: 2px dashed var(--accent-orange);
+    padding: 10px 16px;
+    border-radius: 6px;
+    font-size: 10px;
+    color: #fff;
+}
+
+.player-count-indicator {
+    font-size: 8px;
+    color: #00ffcc;
+}
+
+.status-msg {
+    font-size: 8px;
+    color: var(--accent-orange);
+    margin-top: 8px;
+}
+
 .input-group {
     display: flex;
     flex-direction: column;
@@ -64,7 +84,7 @@ canvas {
 }
 
 .input-group label {
-    font-size: 9px;
+    font-size: 8px;
     color: #aaa;
 }
 
@@ -79,6 +99,7 @@ input[type="text"] {
     border-radius: 6px;
     width: 240px;
     outline: none;
+    text-transform: uppercase;
 }
 
 input[type="range"] {
@@ -120,9 +141,9 @@ input[type="range"] {
 .garage-container {
     display: flex;
     flex-direction: column;
-    gap: 18px;
+    gap: 16px;
     background: var(--card-bg);
-    padding: 20px;
+    padding: 18px;
     border-radius: 8px;
     border: 2px solid var(--accent-purple);
     width: 320px;
@@ -136,7 +157,7 @@ input[type="range"] {
 }
 
 .garage-option label {
-    font-size: 9px;
+    font-size: 8px;
     color: #aaa;
 }
 
@@ -210,6 +231,11 @@ input[type="range"] {
     cursor: pointer;
 }
 
+/* Fixes map clickability */
+.map-card * {
+    pointer-events: none;
+}
+
 .map-card:hover { border-color: var(--accent-orange); }
 .map-preview { height: 70px; }
 .oval-bg { background: linear-gradient(45deg, #1e3c72, #2a5298); }
@@ -269,8 +295,8 @@ input[type="range"] {
 }
 
 .hud-controls-hint {
-    font-size: 7px; color: #bbb;
-    background: rgba(0, 0, 0, 0.7);
+    font-size: 8px; color: #bbb;
+    background: rgba(0, 1, 0, 0.7);
     padding: 5px 8px; border-radius: 4px;
 }
 
