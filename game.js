@@ -2,6 +2,7 @@
 // 1. GLOBAL CONFIG & TRACK DATA
 // ==========================================
 const TRACK_WIDTH = 16;
+const BARRIER_RADIUS = TRACK_WIDTH / 2 - 1.5; // Boundary line where invisible wall hits
 
 const PRESET_TRACKS = {
     oval: [
@@ -29,6 +30,12 @@ let currentCurve = null;
 
 let carModel = 'sport';
 let carColorHex = 0xff0055;
+
+// Nitro system variables
+let nitroLevel = 100; // 0 to 100%
+const MAX_NITRO = 100;
+const NITRO_DRAIN = 0.8;
+const NITRO_RECHARGE = 0.25;
 
 // Global Scope UI Navigation Methods
 window.showMainMenu = function() { hideAllScreens(); document.getElementById("main-menu").classList.remove("hidden"); };
@@ -162,7 +169,7 @@ function buildTrack(points) {
     let vectors = points.map(p => new THREE.Vector3(p.x, 0.1, p.z));
     currentCurve = new THREE.CatmullRomCurve3(vectors, true);
 
-    let roadGeo = new THREE.TubeGeometry(currentCurve, 100, TRACK_WIDTH, 8, true);
+    let roadGeo = new THREE.TubeGeometry(currentCurve, 120, TRACK_WIDTH, 8, true);
     let roadMat = new THREE.MeshLambertMaterial({ color: 0x222225 });
     trackMesh = new THREE.Mesh(roadGeo, roadMat);
     trackMesh.scale.y = 0.01;
@@ -201,6 +208,7 @@ window.startRace = function(trackKey) {
     let hud = document.getElementById("game-hud");
     if (hud) hud.classList.remove("hidden");
     isEditorMode = false;
+    nitroLevel = 100;
 
     currentTrackPoints = (trackKey === 'custom') ? customTrackNodes : PRESET_TRACKS[trackKey] || PRESET_TRACKS.oval;
     buildTrack(currentTrackPoints);
@@ -260,6 +268,25 @@ window.exitEditor = function() {
     showMainMenu();
 };
 
+// Helper: Finds nearest point on track curve to position
+function getClosestTrackPoint(pos) {
+    if (!currentCurve) return { point: pos, distance: 0 };
+
+    let minDistance = Infinity;
+    let closestPt = pos;
+
+    // Scan curve steps to find nearest point on track spline
+    for (let u = 0; u <= 1; u += 0.01) {
+        let pt = currentCurve.getPoint(u);
+        let dist = Math.hypot(pt.x - pos.x, pt.z - pos.z);
+        if (dist < minDistance) {
+            minDistance = dist;
+            closestPt = pt;
+        }
+    }
+    return { point: closestPt, distance: minDistance };
+}
+
 // ==========================================
 // 5. GAME LOOP & PHYSICS
 // ==========================================
@@ -271,8 +298,29 @@ function animate() {
         return;
     }
 
+    // --- NITRO SYSTEM ---
+    let isNitroActive = false;
+    if ((keys[' '] || keys['Space']) && nitroLevel > 0) {
+        isNitroActive = true;
+        nitroLevel = Math.max(0, nitroLevel - NITRO_DRAIN);
+    } else {
+        nitroLevel = Math.min(MAX_NITRO, nitroLevel + NITRO_RECHARGE);
+    }
+
+    // Update Nitro UI Bar
+    let nitroFill = document.getElementById("nitro-bar-fill");
+    if (nitroFill) {
+        nitroFill.style.width = `${nitroLevel}%`;
+        nitroFill.style.background = isNitroActive 
+            ? "linear-gradient(90deg, #ff9900, #ff0055)" 
+            : "linear-gradient(90deg, #0088ff, #00ffff)";
+    }
+
     // Driving Physics
-    if (keys['w'] || keys['W'] || keys['ArrowUp']) speed = Math.min(speed + 0.008, 0.45);
+    let maxSpeed = isNitroActive ? 0.85 : 0.45;
+    let accelRate = isNitroActive ? 0.025 : 0.008;
+
+    if (keys['w'] || keys['W'] || keys['ArrowUp']) speed = Math.min(speed + accelRate, maxSpeed);
     else if (keys['s'] || keys['S'] || keys['ArrowDown']) speed = Math.max(speed - 0.012, -0.15);
     else speed *= 0.98;
 
@@ -286,21 +334,34 @@ function animate() {
     let nextX = car.position.x + Math.sin(rot) * speed;
     let nextZ = car.position.z + Math.cos(rot) * speed;
 
-    // Soft Edge Friction
+    // --- INVISIBLE BARRIER COLLISION SYSTEM ---
     if (currentCurve && !isEditorMode) {
-        let minDistance = Infinity;
-        for (let u = 0; u <= 1; u += 0.04) {
-            let pt = currentCurve.getPoint(u);
-            let dist = Math.hypot(pt.x - nextX, pt.z - nextZ);
-            if (dist < minDistance) minDistance = dist;
+        let testPos = { x: nextX, z: nextZ };
+        let trackInfo = getClosestTrackPoint(testPos);
+
+        if (trackInfo.distance > BARRIER_RADIUS) {
+            // Push car back inside boundary edge
+            let dx = testPos.x - trackInfo.point.x;
+            let dz = testPos.z - trackInfo.point.z;
+            let angle = Math.atan2(dz, dx);
+
+            // Set car position right at boundary limit
+            nextX = trackInfo.point.x + Math.cos(angle) * BARRIER_RADIUS;
+            nextZ = trackInfo.point.z + Math.sin(angle) * BARRIER_RADIUS;
+
+            // Bounce momentum drop
+            speed *= 0.3;
         }
 
         let statusText = document.getElementById("hud-status");
-        if (minDistance > TRACK_WIDTH * 0.75) {
-            speed *= 0.9; // Smoothly slows car near outer edges
-            if (statusText) { statusText.innerText = "OFF TRACK"; statusText.style.color = "#ffaa00"; }
-        } else {
-            if (statusText) { statusText.innerText = "ON TRACK"; statusText.style.color = "#00ffcc"; }
+        if (statusText) {
+            if (isNitroActive) {
+                statusText.innerText = "BOOSTING!";
+                statusText.style.color = "#ffaa00";
+            } else {
+                statusText.innerText = "ON TRACK";
+                statusText.style.color = "#00ffcc";
+            }
         }
     }
 
@@ -310,7 +371,7 @@ function animate() {
     // Boost Pads
     boosters.forEach(b => {
         if (Math.hypot(b.x - car.position.x, b.z - car.position.z) < 4) {
-            speed = 0.8;
+            speed = 0.9;
         }
     });
 
