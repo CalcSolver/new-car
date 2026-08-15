@@ -70,7 +70,7 @@
 <body>
 
   <div id="fore">
-    <div id="version">v1.2.0-MP</div>
+    <div id="version">v1.3.0-OBSTACLES</div>
     <div class="title" id="title">Online Racing Game!</div>
     
     <div class="menuitem">
@@ -106,7 +106,7 @@
   <canvas id="canvas3d"></canvas>
 
   <script>
-    // --- YOUR FIREBASE CONFIGURATION ---
+    // --- FIREBASE CONFIGURATION ---
     const firebaseConfig = {
       apiKey: "AIzaSyBhBjB9cD8IDFarhBMUoG_jhL_Gl277ZG8",
       authDomain: "racing-game-67477.firebaseapp.com",
@@ -204,6 +204,41 @@
       return lineGroup;
     }
     scene.add(drawCheckeredStartLine());
+
+    // --- DETERMINISTIC OBSTACLE SYSTEM ---
+    // Uses a simple pseudo-random generator so every player gets the exact same layout
+    function seededRandom(seed) {
+      const x = Math.sin(seed++) * 10000;
+      return x - Math.floor(x);
+    }
+
+    const obstacles = [];
+    const obstacleGeo = new THREE.BoxGeometry(3.5, 2.5, 3.5);
+    const obstacleMat = new THREE.MeshStandardMaterial({ color: 0xd63031, roughness: 0.3 });
+
+    function spawnDeterministicObstacles() {
+      const totalObstacles = 16;
+      let seed = 42; // Fixed seed guarantees identical track layout across all clients
+
+      for (let i = 0; i < totalObstacles; i++) {
+        // Place around track circle (avoid spawn/finish line area between angle -0.3 and 0.3)
+        const angle = 0.35 + (i / totalObstacles) * (Math.PI * 2 - 0.7);
+        const radiusPercent = 0.2 + seededRandom(seed++) * 0.6; // Keep within track width
+        const radius = R_INNER + radiusPercent * TRACK_WIDTH;
+
+        const x = Math.cos(angle) * radius;
+        const z = Math.sin(angle) * radius;
+
+        const crate = new THREE.Mesh(obstacleGeo, obstacleMat);
+        crate.position.set(x, 1.25, z);
+        crate.rotation.y = seededRandom(seed++) * Math.PI;
+        scene.add(crate);
+
+        // Store bounding circle for hit detection
+        obstacles.push({ x, z, radius: 2.5 });
+      }
+    }
+    spawnDeterministicObstacles();
 
     // --- CAR CREATION FUNCTION ---
     function createCarMesh(colorHue) {
@@ -353,24 +388,46 @@
       setupMultiplayer(rCode, pName);
     });
 
-    // --- SLIDING WALL PHYSICS ---
-    function applyWallCollisions() {
+    // --- COLLISION LOGIC (WALLS & OBSTACLES) ---
+    function applyCollisions() {
+      const carRadius = 1.5;
+
+      // 1. Inner & Outer Track Boundaries
       const distFromCenter = Math.hypot(carGroup.position.x, carGroup.position.z);
-      const carPadding = 1.5;
 
-      if (distFromCenter + carPadding > R_OUTER) {
+      if (distFromCenter + carRadius > R_OUTER) {
         const angle = Math.atan2(carGroup.position.z, carGroup.position.x);
-        carGroup.position.x = Math.cos(angle) * (R_OUTER - carPadding);
-        carGroup.position.z = Math.sin(angle) * (R_OUTER - carPadding);
+        carGroup.position.x = Math.cos(angle) * (R_OUTER - carRadius);
+        carGroup.position.z = Math.sin(angle) * (R_OUTER - carRadius);
         carState.speed *= 0.75;
       }
 
-      if (distFromCenter - carPadding < R_INNER) {
+      if (distFromCenter - carRadius < R_INNER) {
         const angle = Math.atan2(carGroup.position.z, carGroup.position.x);
-        carGroup.position.x = Math.cos(angle) * (R_INNER + carPadding);
-        carGroup.position.z = Math.sin(angle) * (R_INNER + carPadding);
+        carGroup.position.x = Math.cos(angle) * (R_INNER + carRadius);
+        carGroup.position.z = Math.sin(angle) * (R_INNER + carRadius);
         carState.speed *= 0.75;
       }
+
+      // 2. Obstacle Collisions
+      obstacles.forEach(obs => {
+        const dx = carGroup.position.x - obs.x;
+        const dz = carGroup.position.z - obs.z;
+        const dist = Math.hypot(dx, dz);
+        const minDist = carRadius + obs.radius;
+
+        if (dist < minDist) {
+          const overlap = minDist - dist;
+          const pushX = (dx / dist) * overlap;
+          const pushZ = (dz / dist) * overlap;
+
+          carGroup.position.x += pushX;
+          carGroup.position.z += pushZ;
+
+          // Bounce back on impact
+          carState.speed *= -0.4;
+        }
+      });
     }
 
     // --- ANIMATION LOOP ---
@@ -411,7 +468,7 @@
         carGroup.position.x += forwardX * carState.speed;
         carGroup.position.z += forwardZ * carState.speed;
 
-        applyWallCollisions();
+        applyCollisions();
         updateParticles();
         syncLocalPlayerPosition();
 
