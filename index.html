@@ -3,132 +3,216 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Simple Racing Game</title>
+  <title>Simplified 2D Racing Game</title>
   <style>
     body {
       margin: 0;
-      background: #1e1e1e;
+      background: #111;
       color: #fff;
       font-family: sans-serif;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      height: 100vh;
+      min-height: 100vh;
     }
-    #lobby {
-      margin-bottom: 12px;
+    #ui {
+      margin-bottom: 10px;
+      display: flex;
+      gap: 12px;
+      align-items: center;
     }
     input, button {
-      padding: 10px 14px;
-      font-size: 16px;
-      border-radius: 6px;
+      padding: 8px 12px;
+      font-size: 15px;
+      border-radius: 4px;
       border: none;
-      outline: none;
     }
-    input {
-      background: #333;
-      color: #fff;
-      margin-right: 6px;
-    }
-    button {
-      background: #28a745;
-      color: #fff;
-      cursor: pointer;
-      font-weight: bold;
-    }
-    button:hover {
-      background: #218838;
-    }
-    canvas {
-      border: 4px solid #444;
-      background: #333;
-      border-radius: 8px;
-    }
+    input { background: #222; color: #fff; border: 1px solid #444; }
+    button { background: #28a745; color: #fff; cursor: pointer; font-weight: bold; }
+    .hud { font-size: 16px; font-weight: bold; background: #222; padding: 6px 14px; border-radius: 4px; }
+    canvas { border: 2px solid #333; background: #1a1a1a; }
   </style>
 </head>
 <body>
 
-  <div id="lobby">
-    <input type="text" id="roomInput" placeholder="Enter Room Code" value="ROOM1">
-    <button id="joinBtn">Play</button>
+  <div id="ui">
+    <input type="text" id="roomInput" placeholder="Room Code" value="ROOM1">
+    <button id="joinBtn">Join Room</button>
+    <div class="hud" id="lapHud">Lap: 0 / 3</div>
+    <div class="hud" id="nitroHud">Nitro: 100%</div>
   </div>
 
-  <canvas id="gameCanvas" width="800" height="400"></canvas>
+  <canvas id="gameCanvas" width="900" height="550"></canvas>
 
   <script>
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
     const joinBtn = document.getElementById('joinBtn');
     const roomInput = document.getElementById('roomInput');
+    const lapHud = document.getElementById('lapHud');
+    const nitroHud = document.getElementById('nitroHud');
 
-    let isConnected = false;
-    let currentRoom = '';
+    let currentRoom = 'ROOM1';
+    let keys = {};
 
-    // Player Object
-    const player = {
-      x: 50,
-      y: 180,
-      width: 40,
-      height: 20,
-      speed: 4,
-      color: '#ff4757'
+    // Track Outer & Inner Polygons (Simple Oval Track)
+    const trackOuter = [
+      {x: 100, y: 80}, {x: 800, y: 80}, {x: 850, y: 130},
+      {x: 850, y: 420}, {x: 800, y: 470}, {x: 100, y: 470},
+      {x: 50, y: 420}, {x: 50, y: 130}
+    ];
+
+    const trackInner = [
+      {x: 220, y: 180}, {x: 680, y: 180}, {x: 720, y: 220},
+      {x: 720, y: 330}, {x: 680, y: 370}, {x: 220, y: 370},
+      {x: 180, y: 330}, {x: 180, y: 220}
+    ];
+
+    // Car State
+    const car = {
+      x: 120,
+      y: 130,
+      angle: 0,
+      speed: 0,
+      maxSpeed: 6,
+      accel: 0.15,
+      friction: 0.96,
+      turnSpeed: 0.05,
+      nitro: 100,
+      lap: 0,
+      crossedLine: false
     };
 
-    // Keyboard Controls
-    const keys = {};
-    window.addEventListener('keydown', e => keys[e.key] = true);
-    window.addEventListener('keyup', e => keys[e.key] = false);
+    window.addEventListener('keydown', e => keys[e.key.toLowerCase()] = true);
+    window.addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
 
-    // Simplified Direct Join Logic
     joinBtn.addEventListener('click', () => {
-      const roomCode = roomInput.value.trim().toUpperCase();
-      if (!roomCode) return;
-
-      currentRoom = roomCode;
-      isConnected = true;
-      joinBtn.innerText = 'Connected: ' + currentRoom;
-      joinBtn.style.background = '#007bff';
+      const code = roomInput.value.trim().toUpperCase();
+      if (code) {
+        currentRoom = code;
+        joinBtn.innerText = 'In: ' + currentRoom;
+        joinBtn.style.background = '#007bff';
+      }
     });
 
-    // Draw Checkered Start Line
-    function drawStartLine(x, y, width, height, tileSize) {
-      const rows = height / tileSize;
-      const cols = width / tileSize;
-
+    // Draw Checkered Line
+    function drawStartLine(x, y, w, h, size) {
+      const rows = Math.floor(h / size);
+      const cols = Math.floor(w / size);
       for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
           ctx.fillStyle = (r + c) % 2 === 0 ? '#ffffff' : '#000000';
-          ctx.fillRect(x + c * tileSize, y + r * tileSize, tileSize, tileSize);
+          ctx.fillRect(x + c * size, y + r * size, size, size);
         }
       }
     }
 
-    // Main Game Loop
-    function update() {
-      if (isConnected) {
-        if (keys['ArrowRight'] || keys['d']) player.x += player.speed;
-        if (keys['ArrowLeft'] || keys['a']) player.x -= player.speed;
-        if (keys['ArrowUp'] || keys['w']) player.y -= player.speed;
-        if (keys['ArrowDown'] || keys['s']) player.y += player.speed;
+    // Helper: Point in Polygon Check for Track Offroad Collision
+    function pointInPoly(pt, poly) {
+      let inside = false;
+      for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+        let xi = poly[i].x, yi = poly[i].y;
+        let xj = poly[j].x, yj = poly[j].y;
+        let intersect = ((yi > pt.y) !== (yj > pt.y)) &&
+            (pt.x < (xj - xi) * (pt.y - yi) / (yj - yi) + xi);
+        if (intersect) inside = !inside;
       }
+      return inside;
+    }
+
+    function update() {
+      // Acceleration & Braking
+      let isNitroActive = (keys['shift'] || keys['n']) && car.nitro > 0;
+      let effectiveMaxSpeed = isNitroActive ? car.maxSpeed * 1.4 : car.maxSpeed;
+
+      if (isNitroActive && Math.abs(car.speed) > 0.5) {
+        car.nitro = Math.max(0, car.nitro - 0.6);
+      } else if (car.nitro < 100) {
+        car.nitro = Math.min(100, car.nitro + 0.1);
+      }
+
+      if (keys['w'] || keys['arrowup']) car.speed += car.accel * (isNitroActive ? 1.5 : 1);
+      if (keys['s'] || keys['arrowdown']) car.speed -= car.accel;
+
+      // Friction & Cap Speed
+      car.speed *= car.friction;
+      if (car.speed > effectiveMaxSpeed) car.speed = effectiveMaxSpeed;
+      if (car.speed < -effectiveMaxSpeed / 2) car.speed = -effectiveMaxSpeed / 2;
+
+      // Steering (Drift factor scales turn speed when moving fast)
+      const moveDir = car.speed >= 0 ? 1 : -1;
+      if (keys['a'] || keys['arrowleft']) car.angle -= car.turnSpeed * moveDir;
+      if (keys['d'] || keys['arrowright']) car.angle += car.turnSpeed * moveDir;
+
+      // Position Update
+      car.x += Math.cos(car.angle) * car.speed;
+      car.y += Math.sin(car.angle) * car.speed;
+
+      // Track Boundary Check (Slow down off-road)
+      const onOuterTrack = pointInPoly({x: car.x, y: car.y}, trackOuter);
+      const onInnerGrass = pointInPoly({x: car.x, y: car.y}, trackInner);
+      if (!onOuterTrack || onInnerGrass) {
+        car.speed *= 0.85; // Offroad slowdown
+      }
+
+      // Lap Line Detection (Cross x = 150 moving right across track)
+      if (car.x > 140 && car.x < 160 && car.y >= 80 && car.y <= 180) {
+        if (!car.crossedLine) {
+          car.lap += 1;
+          car.crossedLine = true;
+        }
+      } else if (car.x > 200) {
+        car.crossedLine = false;
+      }
+
+      // Update HUD
+      lapHud.innerText = `Lap: ${car.lap} / 3`;
+      nitroHud.innerText = `Nitro: ${Math.round(car.nitro)}%`;
     }
 
     function render() {
-      // Clear Screen
-      ctx.fillStyle = '#2ed573'; // Grass
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // Track Area
-      ctx.fillStyle = '#57606f';
-      ctx.fillRect(0, 100, canvas.width, 200);
+      // Draw Outer Track (Road)
+      ctx.fillStyle = '#44444c';
+      ctx.beginPath();
+      ctx.moveTo(trackOuter[0].x, trackOuter[0].y);
+      for (let i = 1; i < trackOuter.length; i++) ctx.lineTo(trackOuter[i].x, trackOuter[i].y);
+      ctx.closePath();
+      ctx.fill();
 
-      // Render Checkered Start/Finish Line at x = 120
-      drawStartLine(120, 100, 20, 200, 10);
+      // Draw Inner Infield (Grass)
+      ctx.fillStyle = '#1a1a1a';
+      ctx.beginPath();
+      ctx.moveTo(trackInner[0].x, trackInner[0].y);
+      for (let i = 1; i < trackInner.length; i++) ctx.lineTo(trackInner[i].x, trackInner[i].y);
+      ctx.closePath();
+      ctx.fill();
 
-      // Render Player Car
-      ctx.fillStyle = player.color;
-      ctx.fillRect(player.x, player.y, player.width, player.height);
+      // Draw Start/Finish Line across top straight
+      drawStartLine(150, 80, 16, 100, 8);
+
+      // Draw Car
+      ctx.save();
+      ctx.translate(car.x, car.y);
+      ctx.rotate(car.angle);
+
+      // Nitro Flame FX
+      if ((keys['shift'] || keys['n']) && car.nitro > 0 && Math.abs(car.speed) > 0.5) {
+        ctx.fillStyle = '#ff7700';
+        ctx.fillRect(-22, -4, 8, 8);
+      }
+
+      // Main Chassis
+      ctx.fillStyle = '#e74c3c';
+      ctx.fillRect(-14, -8, 28, 16);
+
+      // Roof/Windshield
+      ctx.fillStyle = '#111';
+      ctx.fillRect(-4, -6, 10, 12);
+
+      ctx.restore();
     }
 
     function gameLoop() {
