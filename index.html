@@ -7,144 +7,80 @@
   
   <!-- Classic Fonts -->
   <link href="https://fonts.googleapis.com/css?family=Monoton|Press+Start+2P" rel="stylesheet">
+  
+  <!-- Three.js & Firebase JS SDKs -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
 
   <style>
-    * {
-      box-sizing: border-box;
-      user-select: none;
-    }
+    * { box-sizing: border-box; user-select: none; }
     body, html {
-      margin: 0;
-      padding: 0;
-      width: 100%;
-      height: 100%;
-      overflow: hidden;
-      background: #000;
-      font-family: 'Press Start 2P', monospace;
-      color: #fff;
+      margin: 0; padding: 0; width: 100%; height: 100%;
+      overflow: hidden; background: #000;
+      font-family: 'Press Start 2P', monospace; color: #fff;
     }
 
-    /* Original Overlay Menu Styling */
     #fore {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      z-index: 20;
-      background: rgba(0, 0, 0, 0.85);
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 20px;
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      z-index: 20; background: rgba(0, 0, 0, 0.85);
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 15px;
     }
-    #version {
-      position: absolute;
-      top: 10px;
-      left: 10px;
-      font-size: 10px;
-      color: #888;
-    }
+    #version { position: absolute; top: 10px; left: 10px; font-size: 10px; color: #888; }
     .title {
-      font-family: 'Monoton', cursive;
-      font-size: 42px;
-      color: #ff3366;
-      text-shadow: 0 0 10px #ff3366;
-      text-align: center;
+      font-family: 'Monoton', cursive; font-size: 42px; color: #ff3366;
+      text-shadow: 0 0 10px #ff3366; text-align: center;
     }
-    .menuitem {
-      font-size: 12px;
-      text-align: center;
-      line-height: 24px;
-    }
-    input#name {
-      margin-top: 8px;
-      padding: 10px;
-      font-family: 'Press Start 2P', monospace;
-      font-size: 14px;
-      background: #222;
-      color: #fff;
-      border: 2px solid #ff3366;
-      border-radius: 4px;
-      text-align: center;
-      outline: none;
+    .menuitem { font-size: 11px; text-align: center; line-height: 22px; }
+    input#name, input#roomCode {
+      margin-top: 6px; padding: 8px; font-family: 'Press Start 2P', monospace;
+      font-size: 12px; background: #222; color: #fff; border: 2px solid #ff3366;
+      border-radius: 4px; text-align: center; outline: none;
     }
     #colorpicker {
-      width: 240px;
-      height: 24px;
-      margin-top: 8px;
+      width: 240px; height: 22px; margin-top: 6px;
       background: linear-gradient(to right, 
         hsl(0,100%,50%), hsl(60,100%,50%), hsl(120,100%,50%), 
         hsl(180,100%,50%), hsl(240,100%,50%), hsl(300,100%,50%), hsl(360,100%,50%));
-      border: 2px solid #fff;
-      position: relative;
-      cursor: pointer;
-      border-radius: 4px;
+      border: 2px solid #fff; position: relative; cursor: pointer; border-radius: 4px;
     }
     #slider {
-      width: 6px;
-      height: 100%;
-      background: #fff;
-      border: 1px solid #000;
-      position: absolute;
-      top: 0;
-      left: 0;
+      width: 6px; height: 100%; background: #fff; border: 1px solid #000;
+      position: absolute; top: 0; left: 0;
     }
     #start {
-      margin-top: 10px;
-      padding: 12px 24px;
-      background: #28a745;
-      color: #fff;
-      font-family: 'Press Start 2P', monospace;
-      font-size: 16px;
-      cursor: pointer;
-      border: 2px solid #fff;
-      border-radius: 4px;
-      box-shadow: 0 4px 0 #1e7e34;
+      margin-top: 8px; padding: 12px 24px; background: #28a745; color: #fff;
+      font-family: 'Press Start 2P', monospace; font-size: 14px; cursor: pointer;
+      border: 2px solid #fff; border-radius: 4px; box-shadow: 0 4px 0 #1e7e34;
     }
-    #start:active {
-      transform: translateY(4px);
-      box-shadow: none;
-    }
+    #start:active { transform: translateY(4px); box-shadow: none; }
 
-    /* In-Game HUD */
     #hud {
-      position: absolute;
-      top: 15px;
-      left: 15px;
-      z-index: 10;
-      display: none;
-      flex-direction: column;
-      gap: 10px;
+      position: absolute; top: 15px; left: 15px; z-index: 10;
+      display: none; flex-direction: column; gap: 8px;
     }
     .hud-element {
-      background: rgba(0, 0, 0, 0.75);
-      padding: 10px 14px;
-      border: 2px solid #ff3366;
-      font-size: 11px;
-      color: #fff;
-      border-radius: 4px;
+      background: rgba(0, 0, 0, 0.75); padding: 8px 12px;
+      border: 2px solid #ff3366; font-size: 10px; color: #fff; border-radius: 4px;
     }
 
-    #canvas3d {
-      width: 100vw;
-      height: 100vh;
-      display: block;
-    }
+    #canvas3d { width: 100vw; height: 100vh; display: block; }
   </style>
 </head>
 <body>
 
-  <!-- Classic Menu Overlay -->
   <div id="fore">
-    <div id="version">v1.1.3.14</div>
+    <div id="version">v1.2.0-MP</div>
     <div class="title" id="title">Online Racing Game!</div>
     
     <div class="menuitem">
       Pick a name:<br/>
       <input id="name" placeholder="Name" value="Player1" maxlength="12">
+    </div>
+
+    <div class="menuitem">
+      Room Code:<br/>
+      <input id="roomCode" placeholder="ROOM1" value="ROOM1" maxlength="10">
     </div>
 
     <div class="menuitem">
@@ -159,9 +95,10 @@
     </div>
   </div>
 
-  <!-- HUD overlay during gameplay -->
   <div id="hud">
     <div class="hud-element" id="playerTag">PLAYER: Player1</div>
+    <div class="hud-element" id="roomTag">ROOM: ROOM1</div>
+    <div class="hud-element" id="playersCount">PLAYERS: 1</div>
     <div class="hud-element" id="lapHud">LAP: 1 / 10</div>
     <div class="hud-element" id="speedHud">SPEED: 0 KM/H</div>
   </div>
@@ -169,6 +106,31 @@
   <canvas id="canvas3d"></canvas>
 
   <script>
+    // --- YOUR FIREBASE CONFIGURATION ---
+    const firebaseConfig = {
+      apiKey: "AIzaSyBhBjB9cD8IDFarhBMUoG_jhL_Gl277ZG8",
+      authDomain: "racing-game-67477.firebaseapp.com",
+      databaseURL: "https://racing-game-67477-default-rtdb.firebaseio.com",
+      projectId: "racing-game-67477",
+      storageBucket: "racing-game-67477.firebasestorage.app",
+      messagingSenderId: "48596697348",
+      appId: "1:48596697348:web:897b9f78e511bc2f635051",
+      measurementId: "G-R80VNMYKWR"
+    };
+
+    let db = null;
+    let roomRef = null;
+    let playerRef = null;
+    const localPlayerId = 'p_' + Math.random().toString(36).substr(2, 9);
+    const remotePlayers = {};
+
+    try {
+      firebase.initializeApp(firebaseConfig);
+      db = firebase.database();
+    } catch(e) {
+      console.warn("Firebase initialization issue:", e);
+    }
+
     // --- COLOR PICKER SYSTEM ---
     let selectedHue = 0;
     const picker = document.getElementById('colorpicker');
@@ -180,9 +142,7 @@
       x = Math.max(0, Math.min(rect.width, x));
       selectedHue = Math.floor((x / rect.width) * 360);
       slider.style.left = (x - 3) + 'px';
-      if (carMaterial) {
-        carMaterial.color.setHSL(selectedHue / 360, 0.8, 0.5);
-      }
+      if (carMaterial) carMaterial.color.setHSL(selectedHue / 360, 0.8, 0.5);
     }
 
     let isDragging = false;
@@ -202,22 +162,19 @@
 
     const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
 
-    // Ambient & Directional Lights
     scene.add(new THREE.AmbientLight(0xffffff, 0.7));
     const sun = new THREE.DirectionalLight(0xffffff, 0.8);
     sun.position.set(100, 200, 100);
     sun.castShadow = true;
     scene.add(sun);
 
-    // Ground Grass
+    // Track Setup
     const groundGeo = new THREE.PlaneGeometry(800, 800);
     const groundMat = new THREE.MeshLambertMaterial({ color: 0x27ae60 });
     const ground = new THREE.Mesh(groundGeo, groundMat);
     ground.rotation.x = -Math.PI / 2;
     scene.add(ground);
 
-    // --- EXPANDED LONG TRACK (OVAL TRACK) ---
-    // Increased outer and inner radii for a significantly longer lap length
     const R_OUTER = 140;
     const R_INNER = 95;
     const TRACK_WIDTH = R_OUTER - R_INNER;
@@ -229,13 +186,10 @@
     track.position.y = 0.02;
     scene.add(track);
 
-    // --- CHECKERED START / FINISH LINE ---
+    // Checkered Start Line
     function drawCheckeredStartLine() {
       const lineGroup = new THREE.Group();
-      const rows = 2;
-      const cols = 12;
-      const size = TRACK_WIDTH / cols;
-
+      const rows = 2; const cols = 12; const size = TRACK_WIDTH / cols;
       for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
           const isWhite = (r + c) % 2 === 0;
@@ -251,34 +205,72 @@
     }
     scene.add(drawCheckeredStartLine());
 
-    // --- CAR CREATION ---
-    const carGroup = new THREE.Group();
-    const carMaterial = new THREE.MeshStandardMaterial({ color: 0xff0000 });
-    
-    // Chassis
-    const body = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.8, 4.2), carMaterial);
-    body.position.y = 0.6;
-    carGroup.add(body);
+    // --- CAR CREATION FUNCTION ---
+    function createCarMesh(colorHue) {
+      const group = new THREE.Group();
+      const mat = new THREE.MeshStandardMaterial({ color: new THREE.Color().setHSL(colorHue / 360, 0.8, 0.5) });
+      
+      const body = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.8, 4.2), mat);
+      body.position.y = 0.6;
+      group.add(body);
 
-    // Roof
-    const cabin = new THREE.Mesh(
-      new THREE.BoxGeometry(1.8, 0.6, 2.2), 
-      new THREE.MeshStandardMaterial({ color: 0x111111 })
-    );
-    cabin.position.set(0, 1.2, -0.2);
-    carGroup.add(cabin);
+      const cabin = new THREE.Mesh(
+        new THREE.BoxGeometry(1.8, 0.6, 2.2), 
+        new THREE.MeshStandardMaterial({ color: 0x111111 })
+      );
+      cabin.position.set(0, 1.2, -0.2);
+      group.add(cabin);
 
+      return { group, mat };
+    }
+
+    const localCar = createCarMesh(0);
+    const carGroup = localCar.group;
+    const carMaterial = localCar.mat;
     scene.add(carGroup);
     carGroup.position.set((R_OUTER + R_INNER) / 2, 0, 10);
 
-    // --- PHYSICS & CAR STATE ---
+    // --- DRIFT SMOKE PARTICLE SYSTEM ---
+    const particles = [];
+    const smokeGeo = new THREE.BoxGeometry(0.3, 0.3, 0.3);
+    const smokeMat = new THREE.MeshBasicMaterial({ color: 0xdddddd, transparent: true, opacity: 0.6 });
+
+    function emitDriftSmoke() {
+      const p = new THREE.Mesh(smokeGeo, smokeMat.clone());
+      p.position.copy(carGroup.position);
+      p.position.y = 0.2;
+      p.position.x += (Math.random() - 0.5) * 1.5;
+      p.position.z += (Math.random() - 0.5) * 1.5;
+      scene.add(p);
+      particles.push({ mesh: p, life: 1.0 });
+    }
+
+    function updateParticles() {
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.life -= 0.04;
+        p.mesh.scale.addScalar(0.08);
+        p.mesh.material.opacity = p.life * 0.6;
+        p.mesh.position.y += 0.03;
+        if (p.life <= 0) {
+          scene.remove(p.mesh);
+          p.mesh.geometry.dispose();
+          p.mesh.material.dispose();
+          particles.splice(i, 1);
+        }
+      }
+    }
+
+    // --- CAR DRIFT & MOVEMENT PHYSICS ---
     const carState = {
       speed: 0,
-      maxSpeed: 1.1,
-      accel: 0.025,
-      friction: 0.97,
-      turnSpeed: 0.032,
+      maxSpeed: 1.25,
+      accel: 0.03,
+      friction: 0.985,
+      driftFriction: 0.96,
+      turnSpeed: 0.035,
       angle: 0,
+      isDrifting: false,
       lap: 1,
       maxLaps: 10,
       crossedLine: false,
@@ -289,13 +281,76 @@
     window.addEventListener('keydown', e => keys[e.key.toLowerCase()] = true);
     window.addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
 
+    // --- MULTIPLAYER FIREBASE LOGIC ---
+    function setupMultiplayer(roomCode, playerName) {
+      if (!db) return;
+      roomRef = db.ref('rooms/' + roomCode);
+      playerRef = roomRef.child('players/' + localPlayerId);
+
+      playerRef.set({
+        name: playerName,
+        hue: selectedHue,
+        x: carGroup.position.x,
+        y: carGroup.position.y,
+        z: carGroup.position.z,
+        angle: carState.angle
+      });
+
+      playerRef.onDisconnect().remove();
+
+      roomRef.child('players').on('value', snapshot => {
+        const playersData = snapshot.val() || {};
+        let count = 0;
+
+        Object.keys(playersData).forEach(id => {
+          count++;
+          if (id === localPlayerId) return;
+
+          const data = playersData[id];
+          if (!remotePlayers[id]) {
+            const remoteCar = createCarMesh(data.hue || 0);
+            scene.add(remoteCar.group);
+            remotePlayers[id] = remoteCar;
+          }
+
+          remotePlayers[id].group.position.set(data.x, data.y, data.z);
+          remotePlayers[id].group.rotation.y = data.angle;
+        });
+
+        Object.keys(remotePlayers).forEach(id => {
+          if (!playersData[id]) {
+            scene.remove(remotePlayers[id].group);
+            delete remotePlayers[id];
+          }
+        });
+
+        document.getElementById('playersCount').innerText = `PLAYERS: ${count}`;
+      });
+    }
+
+    function syncLocalPlayerPosition() {
+      if (playerRef && carState.gameStarted) {
+        playerRef.update({
+          x: carGroup.position.x,
+          y: carGroup.position.y,
+          z: carGroup.position.z,
+          angle: carState.angle
+        });
+      }
+    }
+
     // --- START GAME ---
     document.getElementById('start').addEventListener('click', () => {
       const pName = document.getElementById('name').value.trim() || 'Player1';
+      const rCode = document.getElementById('roomCode').value.trim().toUpperCase() || 'ROOM1';
+      
       document.getElementById('playerTag').innerText = `PLAYER: ${pName.toUpperCase()}`;
+      document.getElementById('roomTag').innerText = `ROOM: ${rCode}`;
       document.getElementById('fore').style.display = 'none';
       document.getElementById('hud').style.display = 'flex';
+      
       carState.gameStarted = true;
+      setupMultiplayer(rCode, pName);
     });
 
     // --- SLIDING WALL PHYSICS ---
@@ -323,28 +378,43 @@
       requestAnimationFrame(animate);
 
       if (carState.gameStarted) {
-        // Drive controls
         if (keys['w'] || keys['arrowup']) carState.speed += carState.accel;
         if (keys['s'] || keys['arrowdown']) carState.speed -= carState.accel;
 
-        // Friction & top speed
-        carState.speed *= carState.friction;
-        carState.speed = THREE.MathUtils.clamp(carState.speed, -carState.maxSpeed / 2, carState.maxSpeed);
-
-        // Steering
+        const holdsDriftKey = keys[' '] || keys['shift'];
+        
         const moveDir = carState.speed >= 0 ? 1 : -1;
-        if (keys['a'] || keys['arrowleft']) carState.angle += carState.turnSpeed * moveDir;
-        if (keys['d'] || keys['arrowright']) carState.angle -= carState.turnSpeed * moveDir;
+        let turning = 0;
+        if (keys['a'] || keys['arrowleft']) turning += 1;
+        if (keys['d'] || keys['arrowright']) turning -= 1;
+
+        if (turning !== 0) {
+          carState.angle += turning * carState.turnSpeed * moveDir;
+        }
 
         carGroup.rotation.y = carState.angle;
 
-        // Update positions
-        carGroup.position.x += Math.sin(carState.angle) * carState.speed;
-        carGroup.position.z += Math.cos(carState.angle) * carState.speed;
+        const forwardX = Math.sin(carState.angle);
+        const forwardZ = Math.cos(carState.angle);
+
+        carState.isDrifting = holdsDriftKey && Math.abs(carState.speed) > 0.4 && turning !== 0;
+
+        if (carState.isDrifting) {
+          carState.speed *= carState.driftFriction;
+          emitDriftSmoke();
+        } else {
+          carState.speed *= carState.friction;
+        }
+
+        carState.speed = THREE.MathUtils.clamp(carState.speed, -carState.maxSpeed / 2, carState.maxSpeed);
+
+        carGroup.position.x += forwardX * carState.speed;
+        carGroup.position.z += forwardZ * carState.speed;
 
         applyWallCollisions();
+        updateParticles();
+        syncLocalPlayerPosition();
 
-        // Checkered Line Crossing Detection (Z = 0)
         if (carGroup.position.x > R_INNER && Math.abs(carGroup.position.z) < 3) {
           if (!carState.crossedLine) {
             if (carState.lap < carState.maxLaps) {
@@ -356,16 +426,13 @@
           carState.crossedLine = false;
         }
 
-        // Camera Follow
         const camOffset = new THREE.Vector3(0, 6, -14).applyAxisAngle(new THREE.Vector3(0, 1, 0), carState.angle);
         camera.position.lerp(carGroup.position.clone().add(camOffset), 0.1);
         camera.lookAt(carGroup.position.clone().add(new THREE.Vector3(0, 1, 0)));
 
-        // HUD Updates
         document.getElementById('lapHud').innerText = `LAP: ${carState.lap} / ${carState.maxLaps}`;
         document.getElementById('speedHud').innerText = `SPEED: ${Math.round(Math.abs(carState.speed) * 140)} KM/H`;
       } else {
-        // Menu preview rotation
         camera.position.set(0, 120, 180);
         camera.lookAt(0, 0, 0);
       }
